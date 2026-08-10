@@ -937,13 +937,7 @@ app.registerExtension({
       const helpTitleIcon = svgIcon("help", 16, LIME);
       const helpTitleText = mk("span", { fontSize: "14px", fontWeight: "900", color: "#fff", letterSpacing: ".04em" }, { textContent: "xFlow Minimax H3 - User Guide & Credits" });
       helpTitleGroup.append(helpTitleIcon, helpTitleText);
-
-      const helpCloseBtn = mk("button", {
-        padding: "4px 10px", fontSize: "11px", fontWeight: "700", background: "#ff4444", color: "#fff",
-        border: "none", borderRadius: "4px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px"
-      });
-      helpCloseBtn.append(svgIcon("close", 11, "#fff"), document.createTextNode("Close"));
-      helpHdr.append(helpTitleGroup, helpCloseBtn);
+      helpHdr.appendChild(helpTitleGroup);
       helpInlineDrawer.appendChild(helpHdr);
 
       // Section 1: How to Use Guide Cards
@@ -1126,16 +1120,7 @@ app.registerExtension({
       const setNavIcon = svgIcon("settings", 18, LIME);
       const setNavText = mk("span", { fontSize: "15px", fontWeight: "900", color: "#fff", letterSpacing: ".04em" }, { textContent: "xFlow Minimax H3 - Models & Setup Manager" });
       setNavTitleGroup.append(setNavIcon, setNavText);
-
-      const closeSetBtn = mk("button", {
-        padding: "6px 14px", fontSize: "11px", fontWeight: "700", background: "#ff4444", color: "#fff",
-        border: "none", borderRadius: "6px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px"
-      });
-      closeSetBtn.append(svgIcon("close", 12, "#fff"), document.createTextNode("Close"));
-
-      closeSetBtn.onmouseover = () => (closeSetBtn.style.background = "#ff6666");
-      closeSetBtn.onmouseout = () => (closeSetBtn.style.background = "#ff4444");
-      setHeader.append(setNavTitleGroup, closeSetBtn);
+      setHeader.appendChild(setNavTitleGroup);
       setupInlineDrawer.appendChild(setHeader);
 
       const modelsGrid = mk("div", {
@@ -1202,10 +1187,7 @@ app.registerExtension({
       };
 
       helpBtn.onclick = (e) => { e.stopPropagation(); toggleHelpDrawer(); };
-      helpCloseBtn.onclick = (e) => { e.stopPropagation(); toggleHelpDrawer(false); };
-
       modelsBtn.onclick = (e) => { e.stopPropagation(); toggleSetupDrawer(); };
-      closeSetBtn.onclick = (e) => { e.stopPropagation(); toggleSetupDrawer(false); };
 
       // ── MAIN CONTENT ROW (2 Columns: Left Controls + Right Preview) ────────
       const mainRow = mk("div", {
@@ -2847,54 +2829,6 @@ app.registerExtension({
         modelsGrid.innerHTML = "";
         let anyDl = false;
 
-        // Bulk Download All Missing Weights Button Banner
-        const missingCount = list.filter(m => !m.installed).length;
-        const bulkBanner = mk("div", {
-          background: C.bg2,
-          border: `1px solid ${LIME}`,
-          borderRadius: "8px",
-          padding: "12px 16px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "6px",
-          width: "100%",
-          boxSizing: "border-box",
-        });
-
-        const bulkLeft = mk("div", { display: "flex", flexDirection: "column", gap: "2px" });
-        bulkLeft.appendChild(mk("div", { fontSize: "12px", fontWeight: "800", color: LIME, letterSpacing: ".04em" }, { textContent: "📦 REQUIRED MINIMAX H3 MODEL SAFETENSORS" }));
-        bulkLeft.appendChild(mk("div", { fontSize: "11px", color: C.muted }, { textContent: missingCount > 0 ? `${missingCount} missing model weight(s) required for video generation.` : "All required model weights are installed and ready!" }));
-
-        bulkBanner.appendChild(bulkLeft);
-
-        if (missingCount > 0) {
-          const bulkBtn = mk("button", {
-            padding: "6px 14px",
-            fontSize: "11px",
-            fontWeight: "800",
-            background: LIME,
-            color: "#111",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "6px",
-            boxShadow: "0 2px 10px rgba(0, 255, 102, 0.35)",
-          });
-          bulkBtn.append(svgIcon("download", 13, "#111"), document.createTextNode(`Download All (${missingCount})`));
-          bulkBtn.onclick = async (e) => {
-            e.stopPropagation();
-            for (const m of list) {
-              if (!m.installed && m.status !== "downloading") {
-                try {
-                  await fetch(`/minimax_h3/download_model?id=${m.id}`, { method: "POST" });
-                } catch(e) {}
-              }
-            }
-            startPollingModels();
-          };
           bulkBanner.appendChild(bulkBtn);
         }
 
@@ -4090,6 +4024,9 @@ app.registerExtension({
       function setMode(m) {
         S.mode = m;
         persist();
+
+        if (typeof isHelpDrawerOpen !== "undefined" && isHelpDrawerOpen) toggleHelpDrawer(false);
+        if (typeof isSetupDrawerOpen !== "undefined" && isSetupDrawerOpen) toggleSetupDrawer(false);
 
         [pillT2V, pillI2V, pillR2V].forEach((pillObj, idx) => {
           const modeId = ["T2V", "I2V", "R2V"][idx];
