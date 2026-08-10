@@ -247,8 +247,8 @@ const formatBytes = (bytes) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 };
 
-// Web Audio API Interactive Waveform Canvas Renderer with Timeline Ruler & Bracket Handles
-function drawAudioWaveform(canvas, audioBuffer, startTime = 0, endTime = null) {
+// Web Audio API Interactive Waveform Canvas Renderer with Timeline Zoom, Ruler & Bracket Handles
+function drawAudioWaveform(canvas, audioBuffer, startTime = 0, endTime = null, zoomLevel = 1.0, viewOffset = 0.0) {
   const ctx = canvas.getContext("2d");
   const width = canvas.width;
   const height = canvas.height;
@@ -265,6 +265,11 @@ function drawAudioWaveform(canvas, audioBuffer, startTime = 0, endTime = null) {
   const waveTop = rulerHeight;
   const waveHeight = height - rulerHeight;
 
+  // Calculate visible window based on zoomLevel and viewOffset
+  const visibleDuration = duration / Math.max(1.0, zoomLevel);
+  const viewStart = Math.max(0, Math.min(duration - visibleDuration, viewOffset));
+  const viewEnd = viewStart + visibleDuration;
+
   // 1. BACKGROUND
   ctx.fillStyle = "#0c0d0d";
   ctx.fillRect(0, 0, width, height);
@@ -279,18 +284,18 @@ function drawAudioWaveform(canvas, audioBuffer, startTime = 0, endTime = null) {
   ctx.lineTo(width, rulerHeight);
   ctx.stroke();
 
-  // Draw Time Ticks & Labels
-  const numTicks = 8;
+  // Draw Time Ticks & Labels for the visible viewport window
+  const numTicks = 10;
   ctx.font = "9px system-ui, -apple-system, sans-serif";
-  ctx.fillStyle = "#777777";
+  ctx.fillStyle = "#888888";
   ctx.textAlign = "center";
 
   for (let i = 0; i <= numTicks; i++) {
     const x = (i / numTicks) * width;
-    const tSec = (i / numTicks) * duration;
+    const tSec = viewStart + (i / numTicks) * visibleDuration;
     
     const mins = Math.floor(tSec / 60);
-    const secs = (tSec % 60).toFixed(0);
+    const secs = (tSec % 60).toFixed(1);
     const label = mins > 0 ? `${mins}m${secs}s` : `${secs}s`;
 
     ctx.beginPath();
@@ -299,22 +304,28 @@ function drawAudioWaveform(canvas, audioBuffer, startTime = 0, endTime = null) {
     ctx.strokeStyle = "#3a3d3b";
     ctx.stroke();
 
-    ctx.fillText(label, Math.max(12, Math.min(width - 12, x)), rulerHeight - 7);
+    ctx.fillText(label, Math.max(16, Math.min(width - 16, x)), rulerHeight - 7);
   }
 
-  // 3. WAVEFORM BARS
-  const numBars = Math.floor(width / 3);
-  const samplesPerBar = Math.floor(totalSamples / numBars);
+  // 3. WAVEFORM BARS FOR VISIBLE RANGE
+  const startSample = Math.floor((viewStart / duration) * totalSamples);
+  const endSample = Math.floor((viewEnd / duration) * totalSamples);
+  const visibleSamples = endSample - startSample;
 
-  const startSample = Math.floor((startTime / duration) * totalSamples);
-  const endSample = Math.min(totalSamples, Math.floor((et / duration) * totalSamples));
+  const numBars = Math.floor(width / 3);
+  const samplesPerBar = Math.max(1, Math.floor(visibleSamples / numBars));
+
+  const cropStartSample = Math.floor((startTime / duration) * totalSamples);
+  const cropEndSample = Math.min(totalSamples, Math.floor((et / duration) * totalSamples));
 
   for (let i = 0; i < numBars; i++) {
-    const start = i * samplesPerBar;
+    const sampleIndex = startSample + i * samplesPerBar;
+    if (sampleIndex >= totalSamples) break;
+
     let min = 1.0;
     let max = -1.0;
-    for (let j = 0; j < samplesPerBar; j++) {
-      const val = rawData[start + j] || 0;
+    for (let j = 0; j < samplesPerBar && (sampleIndex + j) < totalSamples; j++) {
+      const val = rawData[sampleIndex + j] || 0;
       if (val < min) min = val;
       if (val > max) max = val;
     }
@@ -323,53 +334,64 @@ function drawAudioWaveform(canvas, audioBuffer, startTime = 0, endTime = null) {
     const x = i * 3;
     const y = waveTop + (waveHeight - barHeight) / 2;
 
-    const samplePos = start;
-    const isInCropRegion = samplePos >= startSample && samplePos <= endSample;
+    const isInCropRegion = sampleIndex >= cropStartSample && sampleIndex <= cropEndSample;
 
     ctx.fillStyle = isInCropRegion ? "#00ff66" : "#333333";
     ctx.fillRect(x, y, 2, barHeight);
   }
 
   // 4. SHADED OVERLAY FOR NON-SELECTED REGIONS
-  const startX = (startTime / duration) * width;
-  const endX = (et / duration) * width;
+  const startX = ((startTime - viewStart) / visibleDuration) * width;
+  const endX = ((et - viewStart) / visibleDuration) * width;
 
   // Left dimmed overlay
-  ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
-  ctx.fillRect(0, waveTop, startX, waveHeight);
+  if (startX > 0) {
+    ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+    ctx.fillRect(0, waveTop, Math.min(width, startX), waveHeight);
+  }
 
   // Right dimmed overlay
-  ctx.fillRect(endX, waveTop, width - endX, waveHeight);
+  if (endX < width) {
+    const rx = Math.max(0, endX);
+    ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+    ctx.fillRect(rx, waveTop, width - rx, waveHeight);
+  }
 
   // Crop Region Border Box
-  ctx.strokeStyle = "#00ff66";
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(startX, waveTop, Math.max(2, endX - startX), waveHeight);
+  if (endX > 0 && startX < width) {
+    const bx = Math.max(0, startX);
+    const bw = Math.min(width - bx, endX - bx);
+    ctx.strokeStyle = "#00ff66";
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(bx, waveTop, Math.max(2, bw), waveHeight);
 
-  // 5. BRACKET HANDLES ([ and ])
-  const handleW = 10;
+    // 5. BRACKET HANDLES ([ and ])
+    const handleW = 10;
 
-  // Left Bracket Handle
-  ctx.fillStyle = "#00ff66";
-  ctx.fillRect(startX - handleW / 2, waveTop, handleW, waveHeight);
-  ctx.fillStyle = "#111111";
-  ctx.fillRect(startX - 1, waveTop + waveHeight / 2 - 8, 2, 16);
+    if (startX >= 0 && startX <= width) {
+      ctx.fillStyle = "#00ff66";
+      ctx.fillRect(startX - handleW / 2, waveTop, handleW, waveHeight);
+      ctx.fillStyle = "#111111";
+      ctx.fillRect(startX - 1, waveTop + waveHeight / 2 - 8, 2, 16);
+    }
 
-  // Right Bracket Handle
-  ctx.fillStyle = "#00ff66";
-  ctx.fillRect(endX - handleW / 2, waveTop, handleW, waveHeight);
-  ctx.fillStyle = "#111111";
-  ctx.fillRect(endX - 1, waveTop + waveHeight / 2 - 8, 2, 16);
+    if (endX >= 0 && endX <= width) {
+      ctx.fillStyle = "#00ff66";
+      ctx.fillRect(endX - handleW / 2, waveTop, handleW, waveHeight);
+      ctx.fillStyle = "#111111";
+      ctx.fillRect(endX - 1, waveTop + waveHeight / 2 - 8, 2, 16);
+    }
 
-  // 6. FLOATING TIME RANGE TOOLTIP
-  const cropDurSec = (et - startTime).toFixed(1);
-  const badgeTxt = `[ ${startTime.toFixed(1)}s  ──►  ${et.toFixed(1)}s  (${cropDurSec}s) ]`;
-  ctx.font = "bold 10px system-ui, sans-serif";
-  ctx.fillStyle = "#00ff66";
-  ctx.textAlign = "center";
+    // 6. FLOATING TIME RANGE TOOLTIP
+    const cropDurSec = (et - startTime).toFixed(1);
+    const badgeTxt = `[ ${startTime.toFixed(1)}s  ──►  ${et.toFixed(1)}s  (${cropDurSec}s) ]`;
+    ctx.font = "bold 10px system-ui, sans-serif";
+    ctx.fillStyle = "#00ff66";
+    ctx.textAlign = "center";
 
-  const badgeX = Math.max(80, Math.min(width - 80, (startX + endX) / 2));
-  ctx.fillText(badgeTxt, badgeX, waveTop + 14);
+    const badgeX = Math.max(80, Math.min(width - 80, (startX + endX) / 2));
+    ctx.fillText(badgeTxt, badgeX, waveTop + 14);
+  }
 }
 
 // Trims AudioBuffer from startTime to endTime and encodes to 16-bit PCM WAV Blob
@@ -3321,10 +3343,37 @@ app.registerExtension({
       const aeDurationBadge = mk("span", { color: C.text });
       aeInfoBar.append(aeFileNameLbl, aeDurationBadge);
 
+      // Timeline Stretch & Zoom Control Bar
+      const aeZoomBar = mk("div", {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        background: C.bg2,
+        padding: "6px 12px",
+        borderRadius: "6px",
+        border: `1px solid ${C.border}`,
+      });
+
+      const aeZoomLabelGroup = mk("div", { display: "flex", alignItems: "center", gap: "6px" });
+      const aeZoomTitle = mk("span", { fontSize: "11px", fontWeight: "800", color: C.text }, { textContent: "TIMELINE STRETCH / ZOOM" });
+      const aeZoomLevelBadge = mk("span", { fontSize: "11px", fontWeight: "800", color: LIME }, { textContent: "1.0x" });
+      aeZoomLabelGroup.append(aeZoomTitle, aeZoomLevelBadge);
+
+      const aeZoomPillsGroup = mk("div", { display: "flex", gap: "4px", alignItems: "center" });
+
+      const zoom1x = mk("button", { padding: "3px 7px", fontSize: "10px", fontWeight: "700", borderRadius: "4px", border: `1px solid ${C.border}`, background: C.bg1, color: C.text, cursor: "pointer" }, { textContent: "1x (Full)" });
+      const zoom2x = mk("button", { padding: "3px 7px", fontSize: "10px", fontWeight: "700", borderRadius: "4px", border: `1px solid ${C.border}`, background: C.bg1, color: C.text, cursor: "pointer" }, { textContent: "2x" });
+      const zoom5x = mk("button", { padding: "3px 7px", fontSize: "10px", fontWeight: "700", borderRadius: "4px", border: `1px solid ${C.border}`, background: C.bg1, color: C.text, cursor: "pointer" }, { textContent: "5x" });
+      const zoom10x = mk("button", { padding: "3px 7px", fontSize: "10px", fontWeight: "700", borderRadius: "4px", border: `1px solid ${C.border}`, background: C.bg1, color: C.text, cursor: "pointer" }, { textContent: "10x" });
+      const fitSelectionBtn = mk("button", { padding: "3px 9px", fontSize: "10px", fontWeight: "800", borderRadius: "4px", border: `1px solid ${LIME}`, background: C.bg1, color: LIME, cursor: "pointer" }, { textContent: "🔍 Fit Selection" });
+
+      aeZoomPillsGroup.append(zoom1x, zoom2x, zoom5x, zoom10x, fitSelectionBtn);
+      aeZoomBar.append(aeZoomLabelGroup, aeZoomPillsGroup);
+
       const aeCanvasBox = mk("div", {
         position: "relative",
         width: "100%",
-        height: "120px",
+        height: "130px",
         background: C.bg1,
         border: `1px solid ${C.border}`,
         borderRadius: "6px",
@@ -3334,7 +3383,7 @@ app.registerExtension({
         justifyContent: "center",
       });
 
-      const aeCanvas = mk("canvas", { width: "624", height: "120", style: "width: 100%; height: 100%; display: block;" });
+      const aeCanvas = mk("canvas", { width: "624", height: "130", style: "width: 100%; height: 100%; display: block;" });
       aeCanvasBox.appendChild(aeCanvas);
 
       const aeControlsGrid = mk("div", {
@@ -3390,7 +3439,7 @@ app.registerExtension({
       lenBox.append(lenHdr, lenPillsRow);
 
       aeControlsGrid.append(startBox, lenBox);
-      aeBody.append(aeInfoBar, aeCanvasBox, aeControlsGrid);
+      aeBody.append(aeInfoBar, aeZoomBar, aeCanvasBox, aeControlsGrid);
 
       const aeFooter = mk("div", {
         padding: "12px 18px",
@@ -3437,11 +3486,45 @@ app.registerExtension({
       let previewAudioCtx = null;
       let previewSourceNode = null;
 
-      // Mouse Drag State for Waveform Bracket Handles
-      let activeDragMode = null; // "left", "right", "center"
+      // Zoom & Viewport Offset State
+      let zoomLevel = 1.0;
+      let viewOffset = 0.0;
+
+      // Mouse Drag State for Waveform Bracket Handles & Pan
+      let activeDragMode = null; // "left", "right", "center", "pan"
       let dragStartMouseX = 0;
       let dragStartSt = 0;
-      let dragStartCropLen = 4.0;
+      let dragStartViewOffset = 0;
+
+      const setZoomLevel = (lvl) => {
+        zoomLevel = Math.max(1.0, Math.min(50.0, lvl));
+        aeZoomLevelBadge.textContent = `${zoomLevel.toFixed(1)}x`;
+        if (currentAudioBuffer) {
+          const totalDur = currentAudioBuffer.duration;
+          const visibleDur = totalDur / zoomLevel;
+          let st = parseFloat(startSlider.value) || 0;
+          viewOffset = Math.max(0, Math.min(totalDur - visibleDur, st - visibleDur * 0.15));
+        }
+        updateCropView();
+      };
+
+      const fitSelectionToView = () => {
+        if (!currentAudioBuffer) return;
+        const totalDur = currentAudioBuffer.duration;
+        let cropLen = parseFloat(lenNumInput.value) || 4.0;
+        let st = parseFloat(startSlider.value) || 0;
+        const desiredVisibleDur = Math.max(cropLen * 1.6, 3.0);
+        zoomLevel = Math.max(1.0, Math.min(50.0, totalDur / desiredVisibleDur));
+        viewOffset = Math.max(0, Math.min(totalDur - desiredVisibleDur, st - cropLen * 0.3));
+        aeZoomLevelBadge.textContent = `${zoomLevel.toFixed(1)}x`;
+        updateCropView();
+      };
+
+      zoom1x.onclick = (e) => { e.stopPropagation(); setZoomLevel(1.0); };
+      zoom2x.onclick = (e) => { e.stopPropagation(); setZoomLevel(2.0); };
+      zoom5x.onclick = (e) => { e.stopPropagation(); setZoomLevel(5.0); };
+      zoom10x.onclick = (e) => { e.stopPropagation(); setZoomLevel(10.0); };
+      fitSelectionBtn.onclick = (e) => { e.stopPropagation(); fitSelectionToView(); };
 
       const setCropLength = (valSec) => {
         const totalDur = currentAudioBuffer ? currentAudioBuffer.duration : 100;
@@ -3468,23 +3551,46 @@ app.registerExtension({
         startValLbl.textContent = `${st.toFixed(1)}s`;
         lenValLbl.textContent = `${(et - st).toFixed(1)}s (Range: ${st.toFixed(1)}s ──► ${et.toFixed(1)}s)`;
 
-        drawAudioWaveform(aeCanvas, currentAudioBuffer, st, et);
+        drawAudioWaveform(aeCanvas, currentAudioBuffer, st, et, zoomLevel, viewOffset);
       };
 
-      // Waveform Canvas Mouse Event Listeners (Draggable Handles & Selection Box)
-      aeCanvas.style.cursor = "crosshair";
-
+      // Canvas Time Conversion Helpers
       const getCanvasTimeFromMouse = (e) => {
         const rect = aeCanvas.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const width = rect.width || aeCanvas.width;
         const duration = currentAudioBuffer ? currentAudioBuffer.duration : 1;
-        return Math.max(0, Math.min(duration, (mouseX / width) * duration));
+        const visibleDuration = duration / Math.max(1.0, zoomLevel);
+        const vStart = Math.max(0, Math.min(duration - visibleDuration, viewOffset));
+        return Math.max(0, Math.min(duration, vStart + (mouseX / width) * visibleDuration));
+      };
+
+      // Mouse Wheel Pan / Scroll & Zoom
+      aeCanvas.onwheel = (e) => {
+        e.preventDefault();
+        if (!currentAudioBuffer) return;
+        const duration = currentAudioBuffer.duration;
+        const visibleDur = duration / Math.max(1.0, zoomLevel);
+
+        if (e.ctrlKey || e.metaKey) {
+          // Zoom In / Out with Ctrl + Scroll
+          const zoomDelta = e.deltaY < 0 ? 1.25 : 0.8;
+          setZoomLevel(zoomLevel * zoomDelta);
+        } else {
+          // Pan Viewport Horizontally with Scroll
+          const panSens = (visibleDur / aeCanvas.width) * 2.5;
+          const deltaSec = (e.deltaX || e.deltaY) * panSens;
+          viewOffset = Math.max(0, Math.min(duration - visibleDur, viewOffset + deltaSec));
+          updateCropView();
+        }
       };
 
       aeCanvas.onmousedown = (e) => {
         if (!currentAudioBuffer) return;
         const duration = currentAudioBuffer.duration;
+        const visibleDuration = duration / Math.max(1.0, zoomLevel);
+        const vStart = Math.max(0, Math.min(duration - visibleDuration, viewOffset));
+
         const rect = aeCanvas.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const width = rect.width || aeCanvas.width;
@@ -3493,10 +3599,10 @@ app.registerExtension({
         let cropLen = parseFloat(lenNumInput.value) || 4.0;
         let et = Math.min(duration, st + cropLen);
 
-        const startX = (st / duration) * width;
-        const endX = (et / duration) * width;
+        const startX = ((st - vStart) / visibleDuration) * width;
+        const endX = ((et - vStart) / visibleDuration) * width;
 
-        const handleThreshold = 12;
+        const handleThreshold = 14;
 
         if (Math.abs(mouseX - startX) <= handleThreshold) {
           activeDragMode = "left";
@@ -3521,6 +3627,9 @@ app.registerExtension({
       window.addEventListener("mousemove", (e) => {
         if (!activeDragMode || !currentAudioBuffer || audioEditorOverlay.style.display === "none") return;
         const duration = currentAudioBuffer.duration;
+        const visibleDuration = duration / Math.max(1.0, zoomLevel);
+        const vStart = Math.max(0, Math.min(duration - visibleDuration, viewOffset));
+
         const rect = aeCanvas.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
         const width = rect.width || aeCanvas.width;
@@ -3544,7 +3653,7 @@ app.registerExtension({
           updateCropView();
         } else if (activeDragMode === "center") {
           const deltaX = mouseX - dragStartMouseX;
-          const deltaTime = (deltaX / width) * duration;
+          const deltaTime = (deltaX / width) * visibleDuration;
           let newSt = Math.max(0, Math.min(duration - cropLen, dragStartSt + deltaTime));
           startSlider.value = newSt.toFixed(1);
           updateCropView();
