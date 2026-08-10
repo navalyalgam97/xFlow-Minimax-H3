@@ -623,7 +623,7 @@ app.registerExtension({
         boxSizing: "border-box",
       });
 
-      // ── ORIENTATION & SIZE SELECTOR (Matching Pixaroma 1:1) ─────────────────
+      // ── ORIENTATION & SIZE SELECTOR (xFlow Custom UI) ─────────────────
       const orientSizeBox = mk("div", {
         background: C.bg2,
         padding: "10px",
@@ -633,6 +633,7 @@ app.registerExtension({
         flexDirection: "column",
         gap: "8px",
         boxSizing: "border-box",
+        position: "relative",
       });
 
       const orientHdr = mk("div", { display: "flex", justifyContent: "space-between", alignItems: "center" });
@@ -669,12 +670,18 @@ app.registerExtension({
         transition: "all 0.15s ease",
       }, { textContent: "Landscape" });
 
+      portraitBtn.onmouseover = () => { if (S.orientation !== "Portrait") portraitBtn.style.borderColor = LIME; };
+      portraitBtn.onmouseout = () => { if (S.orientation !== "Portrait") portraitBtn.style.borderColor = C.border; };
+
+      landscapeBtn.onmouseover = () => { if (S.orientation !== "Landscape") landscapeBtn.style.borderColor = LIME; };
+      landscapeBtn.onmouseout = () => { if (S.orientation !== "Landscape") landscapeBtn.style.borderColor = C.border; };
+
       orientPillGroup.append(portraitBtn, landscapeBtn);
       orientHdr.appendChild(orientPillGroup);
       orientSizeBox.appendChild(orientHdr);
 
-      // Size Dropdown (<select>)
-      const sizeSelect = mk("select", {
+      // Custom Dropdown Trigger Box
+      const sizeTrigger = mk("div", {
         width: "100%",
         background: C.bg1,
         color: LIME,
@@ -683,32 +690,132 @@ app.registerExtension({
         padding: "8px 12px",
         fontSize: "12px",
         fontWeight: "800",
-        outline: "none",
         cursor: "pointer",
-        textAlign: "center",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        boxSizing: "border-box",
+        transition: "all 0.15s ease",
+      });
+
+      const sizeTriggerLabel = mk("span", {}, { textContent: `${S.width} × ${S.height}` });
+      const sizeTriggerArrow = svgIcon("expand", 11, LIME);
+      sizeTrigger.append(sizeTriggerLabel, sizeTriggerArrow);
+
+      // Hover Effect: xFlow Neon Green Border!
+      sizeTrigger.onmouseover = () => {
+        sizeTrigger.style.borderColor = LIME;
+        sizeTrigger.style.boxShadow = `0 0 10px rgba(0, 255, 102, 0.3)`;
+      };
+      sizeTrigger.onmouseout = () => {
+        if (sizeMenu.style.display !== "flex") {
+          sizeTrigger.style.borderColor = C.border;
+          sizeTrigger.style.boxShadow = "none";
+        }
+      };
+
+      // Custom Dropdown Menu Floating Popup
+      const sizeMenu = mk("div", {
+        position: "absolute",
+        top: "100%",
+        left: "0",
+        width: "100%",
+        maxHeight: "240px",
+        background: "#161817",
+        border: `1px solid ${LIME}`,
+        borderRadius: "8px",
+        marginTop: "4px",
+        display: "none",
+        flexDirection: "column",
+        overflowY: "auto",
+        zIndex: "9999",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.9), 0 0 12px rgba(0, 255, 102, 0.25)",
         boxSizing: "border-box",
       });
 
-      const updateSizeDropdownOptions = (orient) => {
-        sizeSelect.innerHTML = "";
+      const updateCustomSizeMenu = (orient) => {
+        sizeMenu.innerHTML = "";
         const list = RESOLUTIONS[orient] || RESOLUTIONS.Landscape;
 
+        let currentFound = false;
+
         list.forEach(resItem => {
-          const opt = mk("option", {
-            value: `${resItem.w}x${resItem.h}`,
-            textContent: resItem.label,
-          });
-          opt.style.backgroundColor = "#181818";
-          opt.style.color = "#ffffff";
-          opt.style.fontSize = "12px";
-          opt.style.fontWeight = "700";
-          opt.style.padding = "6px";
-          if (resItem.w === S.width && resItem.h === S.height) {
-            opt.selected = true;
+          const isSelected = resItem.w === S.width && resItem.h === S.height;
+          if (isSelected) {
+            currentFound = true;
+            sizeTriggerLabel.textContent = resItem.label;
           }
-          sizeSelect.appendChild(opt);
+
+          const itemEl = mk("div", {
+            padding: "8px 12px",
+            fontSize: "12px",
+            fontWeight: "700",
+            color: isSelected ? "#111" : (resItem.rec ? LIME : C.text),
+            background: isSelected ? LIME : "transparent",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            transition: "all 0.12s ease",
+            borderLeft: isSelected ? `3px solid ${LIME}` : "3px solid transparent",
+          });
+
+          itemEl.appendChild(document.createTextNode(resItem.label));
+          if (isSelected) {
+            itemEl.appendChild(svgIcon("check", 12, "#111"));
+          }
+
+          itemEl.onmouseover = () => {
+            if (!isSelected) {
+              itemEl.style.background = "#222b24";
+              itemEl.style.color = LIME;
+              itemEl.style.borderLeftColor = LIME;
+            }
+          };
+
+          itemEl.onmouseout = () => {
+            if (!isSelected) {
+              itemEl.style.background = "transparent";
+              itemEl.style.color = resItem.rec ? LIME : C.text;
+              itemEl.style.borderLeftColor = "transparent";
+            }
+          };
+
+          itemEl.onclick = (evt) => {
+            evt.stopPropagation();
+            S.width = resItem.w;
+            S.height = resItem.h;
+            sizeTriggerLabel.textContent = resItem.label;
+            sizeMenu.style.display = "none";
+            sizeTrigger.style.borderColor = C.border;
+            sizeTrigger.style.boxShadow = "none";
+            persist();
+            updateCustomSizeMenu(S.orientation);
+          };
+
+          sizeMenu.appendChild(itemEl);
         });
+
+        if (!currentFound && list.length > 0) {
+          S.width = list[0].w;
+          S.height = list[0].h;
+          sizeTriggerLabel.textContent = list[0].label;
+        }
       };
+
+      sizeTrigger.onclick = (evt) => {
+        evt.stopPropagation();
+        const isOpen = sizeMenu.style.display === "flex";
+        sizeMenu.style.display = isOpen ? "none" : "flex";
+        sizeTrigger.style.borderColor = isOpen ? LIME : C.border;
+        sizeTrigger.style.boxShadow = isOpen ? `0 0 10px rgba(0, 255, 102, 0.3)` : "none";
+      };
+
+      document.addEventListener("click", () => {
+        sizeMenu.style.display = "none";
+        sizeTrigger.style.borderColor = C.border;
+        sizeTrigger.style.boxShadow = "none";
+      });
 
       portraitBtn.onclick = () => {
         S.orientation = "Portrait";
@@ -724,7 +831,7 @@ app.registerExtension({
 
         S.width = 480;
         S.height = 864;
-        updateSizeDropdownOptions("Portrait");
+        updateCustomSizeMenu("Portrait");
         persist();
       };
 
@@ -742,21 +849,12 @@ app.registerExtension({
 
         S.width = 864;
         S.height = 480;
-        updateSizeDropdownOptions("Landscape");
+        updateCustomSizeMenu("Landscape");
         persist();
       };
 
-      sizeSelect.onchange = () => {
-        const parts = sizeSelect.value.split("x");
-        if (parts.length === 2) {
-          S.width = parseInt(parts[0]);
-          S.height = parseInt(parts[1]);
-          persist();
-        }
-      };
-
-      updateSizeDropdownOptions(S.orientation || "Landscape");
-      orientSizeBox.appendChild(sizeSelect);
+      updateCustomSizeMenu(S.orientation || "Landscape");
+      orientSizeBox.append(sizeTrigger, sizeMenu);
       leftCol.appendChild(orientSizeBox);
 
       // Duration & FPS Row
