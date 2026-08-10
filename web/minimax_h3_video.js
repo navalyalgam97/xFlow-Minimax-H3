@@ -2327,21 +2327,27 @@ app.registerExtension({
       const lsOverlayHeader = mk("div", { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexShrink: "0" });
       lsOverlayHeader.appendChild(cap("Longest Side settings"));
       
+      // SLEEK MINIMAL BRIGHT RED CLOSE BUTTON (Matching Setup option 1:1)
       const closeLsBtn = mk("button", {
-        background: C.bg2,
-        color: C.text,
-        border: `1px solid ${C.border}`,
+        background: "#ff4444",
+        color: "#ffffff",
+        border: "none",
         borderRadius: "6px",
         cursor: "pointer",
         fontSize: "12px",
         fontWeight: "800",
-        padding: "4px 10px",
-        transition: "all .12s ease",
+        padding: "6px 16px",
+        boxShadow: "0 2px 10px rgba(255, 68, 68, 0.4)",
+        transition: "all .15s ease",
         display: "inline-flex",
         alignItems: "center",
-        gap: "4px"
+        gap: "6px",
       });
-      closeLsBtn.appendChild(svgIcon("close", 12, C.text));
+      closeLsBtn.appendChild(svgIcon("close", 12, "#fff"));
+      closeLsBtn.appendChild(document.createTextNode("Close"));
+
+      closeLsBtn.onmouseover = () => (closeLsBtn.style.background = "#ff6666");
+      closeLsBtn.onmouseout = () => (closeLsBtn.style.background = "#ff4444");
       closeLsBtn.onclick = (e) => {
         e.stopPropagation();
         closeOverlay(longestSideOverlay);
