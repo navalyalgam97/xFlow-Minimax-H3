@@ -1295,6 +1295,188 @@ app.registerExtension({
         }
       };
 
+      // ── GALLERY OVERLAY SYSTEM ──────────────────────────────────────────
+      const galleryOverlay = mk("div", {
+        position: "absolute",
+        top: "0",
+        left: "0",
+        right: "0",
+        bottom: "0",
+        width: "100%",
+        height: "100%",
+        background: C.bg0,
+        zIndex: "100",
+        display: "none",
+        flexDirection: "column",
+        padding: "16px",
+        boxSizing: "border-box",
+        borderRadius: "12px",
+        opacity: "0",
+        transform: "translateY(6px)",
+        transition: "opacity .22s, transform .22s",
+        overflow: "hidden",
+      });
+
+      const galHeader = mk("div", {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: "12px",
+        flexShrink: "0",
+        width: "100%",
+        boxSizing: "border-box",
+      });
+      galHeader.appendChild(cap("GENERATED VIDEO OUTPUT GALLERY"));
+
+      const galActions = mk("div", { display: "flex", alignItems: "center", gap: "8px" });
+
+      const openFolderBtn = mk("button", {
+        background: C.bg2,
+        color: C.text,
+        border: `1px solid ${C.border}`,
+        borderRadius: "6px",
+        cursor: "pointer",
+        fontSize: "11px",
+        fontWeight: "700",
+        padding: "6px 12px",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "6px",
+      });
+      openFolderBtn.appendChild(svgIcon("upload", 12, LIME));
+      openFolderBtn.appendChild(document.createTextNode("Open Output Folder"));
+      openFolderBtn.onclick = async () => {
+        try {
+          await fetch("/minimax_h3/open_folder", { method: "POST" });
+        } catch (e) {}
+      };
+
+      const closeGalBtn = mk("button", {
+        background: "#ff4444",
+        color: "#ffffff",
+        border: "none",
+        borderRadius: "6px",
+        cursor: "pointer",
+        fontSize: "12px",
+        fontWeight: "800",
+        padding: "6px 16px",
+        boxShadow: "0 2px 10px rgba(255, 68, 68, 0.4)",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "6px",
+      });
+      closeGalBtn.appendChild(svgIcon("close", 12, "#fff"));
+      closeGalBtn.appendChild(document.createTextNode("Close"));
+      closeGalBtn.onclick = () => closeOverlay(galleryOverlay);
+
+      galActions.append(openFolderBtn, closeGalBtn);
+      galHeader.appendChild(galActions);
+      galleryOverlay.appendChild(galHeader);
+
+      const galGrid = mk("div", {
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+        gap: "12px",
+        flex: "1",
+        overflowY: "auto",
+        overflowX: "hidden",
+        width: "100%",
+        boxSizing: "border-box",
+        paddingRight: "4px",
+      });
+      galleryOverlay.appendChild(galGrid);
+      root.appendChild(galleryOverlay);
+
+      const renderGalleryItems = (items) => {
+        galGrid.innerHTML = "";
+        if (!items || items.length === 0) {
+          galGrid.appendChild(mk("div", { fontSize: "12px", color: C.muted, padding: "20px", gridColumn: "1 / -1" }, { textContent: "No output videos generated yet." }));
+          return;
+        }
+
+        items.forEach(vid => {
+          const card = mk("div", {
+            background: C.bg2,
+            borderRadius: "8px",
+            border: `1px solid ${C.border}`,
+            padding: "8px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "6px",
+            boxSizing: "border-box",
+          });
+
+          const vidBox = mk("video", {
+            width: "100%",
+            height: "130px",
+            src: vid.video_url,
+            controls: true,
+            loop: true,
+            muted: true,
+            objectFit: "cover",
+            borderRadius: "6px",
+            background: "#000",
+          });
+
+          const fnLabel = mk("div", { fontSize: "10px", fontWeight: "700", color: C.text, wordBreak: "break-all" }, { textContent: vid.filename });
+
+          const row = mk("div", { display: "flex", justifyContent: "space-between", alignItems: "center" });
+
+          const playBtn = mk("button", {
+            padding: "4px 8px", fontSize: "10px", fontWeight: "700",
+            background: LIME, color: "#111", border: "none", borderRadius: "4px", cursor: "pointer",
+            display: "inline-flex", alignItems: "center", gap: "4px"
+          });
+          playBtn.appendChild(svgIcon("play", 10, "#111"));
+          playBtn.appendChild(document.createTextNode("Load"));
+          playBtn.onclick = () => {
+            placeholder.style.display = "none";
+            videoPlayer.style.display = "block";
+            videoPlayer.src = vid.video_url;
+            videoPlayer.load();
+            videoPlayer.play().catch(() => {});
+            closeOverlay(galleryOverlay);
+          };
+
+          const delBtn = mk("button", {
+            padding: "4px 8px", fontSize: "10px", fontWeight: "600",
+            background: C.bg1, color: C.err, border: `1px solid ${C.err}`, borderRadius: "4px", cursor: "pointer",
+            display: "inline-flex", alignItems: "center", gap: "4px"
+          });
+          delBtn.appendChild(svgIcon("trash", 10, C.err));
+          delBtn.appendChild(document.createTextNode("Delete"));
+          delBtn.onclick = async () => {
+            if (confirm(`Delete ${vid.filename}?`)) {
+              await fetch("/minimax_h3/delete", {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ filename: vid.filename })
+              });
+              fetchAndRenderGallery();
+            }
+          };
+
+          row.append(playBtn, delBtn);
+          card.append(vidBox, fnLabel, row);
+          galGrid.appendChild(card);
+        });
+      };
+
+      const fetchAndRenderGallery = async () => {
+        try {
+          const res = await fetch("/minimax_h3/gallery");
+          const data = await res.json();
+          if (data && data.videos) renderGalleryItems(data.videos);
+          else renderGalleryItems([]);
+        } catch (e) {
+          renderGalleryItems([]);
+        }
+      };
+
+      galleryBtn.onclick = () => {
+        fetchAndRenderGallery();
+        openOverlay(galleryOverlay);
+      };
+
       // Mode Switcher logic with Vector Icon state updates
       function setMode(m) {
         S.mode = m;
