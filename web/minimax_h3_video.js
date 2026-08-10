@@ -279,6 +279,12 @@ const formatBytes = (bytes) => {
       filter: brightness(1.2);
       transform: translateY(-1px);
     }
+    .fk-root select option {
+      background-color: #181818 !important;
+      color: #ffffff !important;
+      font-weight: 700 !important;
+      padding: 8px !important;
+    }
   `;
   document.head.appendChild(styleEl);
 })();
@@ -636,13 +642,13 @@ app.registerExtension({
       const orientPillGroup = mk("div", { display: "flex", gap: "6px" });
 
       const portraitBtn = mk("button", {
-        padding: "4px 10px",
+        padding: "5px 12px",
         fontSize: "11px",
-        fontWeight: "700",
+        fontWeight: S.orientation === "Portrait" ? "800" : "600",
         borderRadius: "6px",
-        border: `1px solid ${S.orientation === "Portrait" ? C.accentOrange : C.border}`,
-        background: S.orientation === "Portrait" ? C.accentOrange : C.bg1,
-        color: S.orientation === "Portrait" ? "#fff" : C.text,
+        border: `1px solid ${S.orientation === "Portrait" ? LIME : C.border}`,
+        background: S.orientation === "Portrait" ? LIME : C.bg1,
+        color: S.orientation === "Portrait" ? "#111" : C.text,
         cursor: "pointer",
         flex: "1",
         outline: "none",
@@ -650,13 +656,13 @@ app.registerExtension({
       }, { textContent: "Portrait" });
 
       const landscapeBtn = mk("button", {
-        padding: "4px 10px",
+        padding: "5px 12px",
         fontSize: "11px",
-        fontWeight: "700",
+        fontWeight: S.orientation === "Landscape" ? "800" : "600",
         borderRadius: "6px",
-        border: `1px solid ${S.orientation === "Landscape" ? C.accentOrange : C.border}`,
-        background: S.orientation === "Landscape" ? C.accentOrange : C.bg1,
-        color: S.orientation === "Landscape" ? "#fff" : C.text,
+        border: `1px solid ${S.orientation === "Landscape" ? LIME : C.border}`,
+        background: S.orientation === "Landscape" ? LIME : C.bg1,
+        color: S.orientation === "Landscape" ? "#111" : C.text,
         cursor: "pointer",
         flex: "1",
         outline: "none",
@@ -671,12 +677,12 @@ app.registerExtension({
       const sizeSelect = mk("select", {
         width: "100%",
         background: C.bg1,
-        color: C.text,
+        color: LIME,
         border: `1px solid ${C.border}`,
         borderRadius: "6px",
-        padding: "6px 10px",
+        padding: "8px 12px",
         fontSize: "12px",
-        fontWeight: "700",
+        fontWeight: "800",
         outline: "none",
         cursor: "pointer",
         textAlign: "center",
@@ -692,6 +698,11 @@ app.registerExtension({
             value: `${resItem.w}x${resItem.h}`,
             textContent: resItem.label,
           });
+          opt.style.backgroundColor = "#181818";
+          opt.style.color = "#ffffff";
+          opt.style.fontSize = "12px";
+          opt.style.fontWeight = "700";
+          opt.style.padding = "6px";
           if (resItem.w === S.width && resItem.h === S.height) {
             opt.selected = true;
           }
@@ -701,13 +712,15 @@ app.registerExtension({
 
       portraitBtn.onclick = () => {
         S.orientation = "Portrait";
-        portraitBtn.style.background = C.accentOrange;
-        portraitBtn.style.borderColor = C.accentOrange;
-        portraitBtn.style.color = "#fff";
+        portraitBtn.style.background = LIME;
+        portraitBtn.style.borderColor = LIME;
+        portraitBtn.style.color = "#111";
+        portraitBtn.style.fontWeight = "800";
 
         landscapeBtn.style.background = C.bg1;
         landscapeBtn.style.borderColor = C.border;
         landscapeBtn.style.color = C.text;
+        landscapeBtn.style.fontWeight = "600";
 
         S.width = 480;
         S.height = 864;
@@ -717,13 +730,15 @@ app.registerExtension({
 
       landscapeBtn.onclick = () => {
         S.orientation = "Landscape";
-        landscapeBtn.style.background = C.accentOrange;
-        landscapeBtn.style.borderColor = C.accentOrange;
-        landscapeBtn.style.color = "#fff";
+        landscapeBtn.style.background = LIME;
+        landscapeBtn.style.borderColor = LIME;
+        landscapeBtn.style.color = "#111";
+        landscapeBtn.style.fontWeight = "800";
 
         portraitBtn.style.background = C.bg1;
         portraitBtn.style.borderColor = C.border;
         portraitBtn.style.color = C.text;
+        portraitBtn.style.fontWeight = "600";
 
         S.width = 864;
         S.height = 480;
