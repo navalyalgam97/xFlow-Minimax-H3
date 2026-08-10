@@ -2,6 +2,23 @@
 
 All notable changes to the **xFlowOne · Minimax H3** single-node video interface for ComfyUI.
 
+## [1.4.0] - 2026-08-10
+
+### 🚀 Dual Image Uploads, Maximise Preview & Automatic Workflow Branching
+- **🖼 Dual Image Upload Boxes (`START FRAME` & `END FRAME`)**:
+  - `START FRAME (First Frame)` box + `END FRAME (Last Frame - Optional)` box.
+  - Image thumbnails with xFlow neon green border, file name, and natural image dimension badge (e.g. `864 × 480 px`).
+- **🔍 Full-Screen Maximise Preview Overlay (`⤢`)**:
+  - Added **Maximise icon button (`⤢`)** on top-right of uploaded image preview box.
+  - Opens a high-res full-screen image viewer overlay with backdrop blur, exact image dimensions (`Width × Height px`), file name, and red close button (`#ff4444`).
+- **🔀 Automatic Workflow Branching**:
+  - **Single Image Uploaded (Start Frame)** $\rightarrow$ Automatically executes the **First Frame Image-to-Video Workflow** (`workflow_image_to_video.json`).
+  - **Both Images Uploaded (Start Frame & End Frame)** $\rightarrow$ Automatically executes the **First Frame + Last Frame Image-to-Video Workflow** (`workflow_image_to_video_fflf.json`).
+- **🔴 Red Close Button Uniformity**:
+  - Styled `longestSideOverlay` close button identically to the `Setup` overlay with `#ff4444` background, white SVG cross icon, and white text.
+
+---
+
 ## [1.3.0] - 2026-08-10
 
 ### 🚀 Major Features & UI Enhancements

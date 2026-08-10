@@ -295,6 +295,7 @@ def _async_download_worker(model_id: str):
 WORKFLOW_MAP = {
     "text_to_video": "workflows/text_to_video_workflow.json",
     "image_to_video": "workflows/image_to_video_workflow.json",
+    "image_to_video_fflf": "workflows/image_to_video_fflf_workflow.json",
     "reference_to_video": "workflows/reference_to_video_workflow.json"
 }
 
@@ -610,6 +611,9 @@ PromptServer.instance.routes.get("/minimax_h3/workflow_text_to_video")(
 )
 PromptServer.instance.routes.get("/minimax_h3/workflow_image_to_video")(
     _serve_json("workflows/image_to_video_workflow.json")
+)
+PromptServer.instance.routes.get("/minimax_h3/workflow_image_to_video_fflf")(
+    _serve_json("workflows/image_to_video_fflf_workflow.json")
 )
 PromptServer.instance.routes.get("/minimax_h3/workflow_reference_to_video")(
     _serve_json("workflows/reference_to_video_workflow.json")

@@ -3,7 +3,7 @@
 <div align="center">
 
 ![xFlowOne Banner](https://img.shields.io/badge/xFlowOne-Minimax_H3-00ff66?style=for-the-badge&logo=comfyui&logoColor=black)
-![Version](https://img.shields.io/badge/version-1.3.0-00ff66?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.4.0-00ff66?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
 
 *A single-node, 1:1 `xFlowOne` design system UI for Minimax H3 Video Generation in ComfyUI V2.*
@@ -17,8 +17,11 @@
 - 🟢 **1:1 xFlowOne UI Architecture**: Full-bleed dark mode UI with `#00ff66` neon lime accents, scoped `.fk-root` styling, and 0px-padding edge-to-edge canvas integration matching Image 2 (`xFlowOne · LTX-2.3`).
 - 🎬 **3 Operational Generation Modes**:
   - **T2V (Text to Video)**: Generate high-fidelity videos directly from text prompts with Orientation & Size custom dropdowns.
-  - **I2V (Image to Video)**: Animate static images with Longest Side selector & Gear Icon Settings Drawer popup.
+  - **I2V (Image to Video)**: Dual Image Upload boxes (`START FRAME` & `END FRAME`) with automatic workflow switching (First Frame vs. First + Last Frame).
   - **R2V (Ref + Audio)**: Sync reference images with audio input files.
+- 🖼 **Dual Image Upload Boxes & Full-Screen Preview Overlay**:
+  - Upload `START FRAME` and optional `END FRAME` with file thumbnails, file names, and natural dimension badges (`864 × 480 px`).
+  - Top right **Maximise Icon (`⤢`)** opens full-screen image preview modal.
 - ⚙️ **Longest Side Selector & Gear Settings Drawer (I2V / R2V modes)**:
   - Interactive size tabs, aspect ratio shape chips, 3x3 crop alignment matrix, step rounding (`Off`, `8`, `16`, `32`, `64`), and resample mode controls.
 - ⚡ **Visual Interactive Duration Slider (1s - 10s)**:
@@ -54,7 +57,18 @@ All required models can be managed and downloaded automatically via the built-in
 
 ## 📜 Changelog
 
-### Version 1.3.0 (Latest Release)
+### Version 1.4.0 (Latest Release)
+
+- 🖼 **Dual Image Upload Boxes**: Added `START FRAME (First Frame)` & `END FRAME (Last Frame - Optional)` upload controls.
+- 🔍 **Maximise Image Preview (`⤢`)**: Full-screen modal viewer with dimensions badge (`Width × Height px`).
+- 🔀 **Automatic Workflow Branching**: Auto-switches between **First Frame** (`image_to_video`) and **First Frame + Last Frame** (`image_to_video_fflf`) based on uploaded image count.
+- 🔴 **Red Close Button Uniformity**: Styled `longestSideOverlay` close button identically to `Setup` overlay (`#ff4444`).
+- 🎨 **Orientation & Size Custom Dropdowns**: Clean white resolution numbers with xFlow neon green hover glow.
+- 🎞 **Custom FPS Dropdown**: xFlow styled 24 FPS / 30 FPS selection menu.
+- ⚡ **Visual Duration Slider**: 1-10s range slider in neon green with live frame calculation.
+- 🎲 **Interactive Seed Controls**: Minus, neon green shuffle button, and plus controls.
+
+### Version 1.3.0
 
 - 🎨 **Orientation & Size Custom Dropdowns**: Clean white resolution numbers with xFlow neon green hover glow.
 - 🎞 **Custom FPS Dropdown**: xFlow styled 24 FPS / 30 FPS selection menu.

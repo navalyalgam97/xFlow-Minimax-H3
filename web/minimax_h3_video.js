@@ -380,7 +380,7 @@ async function checkSystemValidation(mode) {
 }
 
 async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInner) {
-  const modeKey = mode === "I2V" ? "image_to_video" : (mode === "R2V" ? "reference_to_video" : "text_to_video");
+  const modeKey = mode === "image_to_video_fflf" ? "image_to_video_fflf" : (mode === "I2V" ? "image_to_video" : (mode === "R2V" ? "reference_to_video" : "text_to_video"));
   let endpoint = `/minimax_h3/workflow_${modeKey}`;
 
   const res = await fetch(endpoint);
@@ -422,9 +422,16 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
         inputs["denoise"] = 1.0;
       } else if (classType === "MiniMaxH3ImageToVideo" || classType === "MiniMaxH3ReferenceToVideo") {
         inputs["prompt"] = params.prompt;
-        inputs["motion_strength"] = parseFloat(params.motion_strength);
+        inputs["motion_strength"] = parseFloat(params.motion_strength || 0.5);
         if (params.width) inputs["width"] = parseInt(params.width);
         if (params.height) inputs["height"] = parseInt(params.height);
+      } else if (classType === "PixaromaLoadImageMini") {
+        const title = node.title || "";
+        if (title.includes("Last Frame") || title.includes("2.")) {
+          inputs["image"] = params.image_name_2 || params.image_name_1 || node.widgets_values[0];
+        } else {
+          inputs["image"] = params.image_name_1 || node.widgets_values[0];
+        }
       }
     }
 
@@ -1462,31 +1469,191 @@ app.registerExtension({
       seedBox.appendChild(seedCtrlRow);
       leftCol.appendChild(seedBox);
 
-      // Media Input Slot Card (for I2V & R2V modes)
+      // ── MEDIA INPUT SLOT CARD (Dual Image Box for I2V & R2V modes) ──────────
       const slotCard = mk("div", {
         display: "none",
         flexDirection: "column",
-        gap: "6px",
+        gap: "8px",
         background: C.bg2,
         padding: "10px",
         borderRadius: "6px",
-        border: `1px dashed ${C.border}`,
+        border: `1px solid ${C.border}`,
         boxSizing: "border-box",
       });
-      slotCard.appendChild(cap("INPUT MEDIA FILE"));
 
-      const imageFileInput = mk("input", { type: "file", accept: "image/*", display: "none" });
-      const uploadImgBtn = mk("button", {
-        padding: "6px 12px", fontSize: "11px", fontWeight: "700",
-        background: C.bg1, color: LIME, border: `1px solid ${LIME}`, borderRadius: "4px", cursor: "pointer",
-        display: "inline-flex", alignItems: "center", gap: "6px"
-      });
-      uploadImgBtn.appendChild(svgIcon("upload", 13, LIME));
-      uploadImgBtn.appendChild(document.createTextNode("Upload Image File"));
-      uploadImgBtn.onclick = () => imageFileInput.click();
-      const imgLabel = mk("div", { fontSize: "10px", color: C.muted, marginTop: "2px" });
-      imageFileInput.onchange = () => { if (imageFileInput.files[0]) imgLabel.textContent = imageFileInput.files[0].name; };
-      slotCard.append(uploadImgBtn, imageFileInput, imgLabel);
+      let imgData1 = null;
+      let imgData2 = null;
+
+      const createImgUploadBox = (title, slotKey) => {
+        const box = mk("div", {
+          background: C.bg1,
+          border: `1px solid ${C.border}`,
+          borderRadius: "6px",
+          padding: "8px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "6px",
+          boxSizing: "border-box",
+        });
+
+        const hdr = mk("div", { display: "flex", justifyContent: "space-between", alignItems: "center" });
+        hdr.appendChild(cap(title));
+        box.appendChild(hdr);
+
+        const fileInput = mk("input", { type: "file", accept: "image/*", display: "none" });
+
+        const emptyArea = mk("div", {
+          border: `1px dashed ${C.border}`,
+          borderRadius: "4px",
+          padding: "8px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "6px",
+          cursor: "pointer",
+          background: C.bg2,
+          transition: "all 0.15s ease",
+        });
+        const uploadIcon = svgIcon("upload", 12, LIME);
+        const uploadTxt = mk("span", { fontSize: "11px", fontWeight: "700", color: LIME }, { textContent: "Upload Image File" });
+        emptyArea.append(uploadIcon, uploadTxt);
+        emptyArea.onclick = () => fileInput.click();
+
+        emptyArea.onmouseover = () => {
+          emptyArea.style.borderColor = LIME;
+          emptyArea.style.background = "#222b24";
+        };
+        emptyArea.onmouseout = () => {
+          emptyArea.style.borderColor = C.border;
+          emptyArea.style.background = C.bg2;
+        };
+
+        const previewArea = mk("div", {
+          display: "none",
+          alignItems: "center",
+          gap: "8px",
+          background: C.bg2,
+          padding: "6px",
+          borderRadius: "4px",
+          border: `1px solid ${C.border}`,
+          boxSizing: "border-box",
+        });
+
+        const thumbImg = mk("img", {
+          width: "44px",
+          height: "44px",
+          objectFit: "cover",
+          borderRadius: "4px",
+          border: `1px solid ${LIME}`,
+        });
+
+        const metaCol = mk("div", { display: "flex", flexDirection: "column", gap: "2px", flex: "1", minWidth: "0" });
+        const nameLbl = mk("span", { fontSize: "11px", fontWeight: "700", color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+        const dimBadge = mk("span", { fontSize: "10px", fontWeight: "800", color: LIME }, { textContent: "" });
+        metaCol.append(nameLbl, dimBadge);
+
+        const actionGroup = mk("div", { display: "flex", alignItems: "center", gap: "4px" });
+
+        const maxBtn = mk("button", {
+          background: C.bg1,
+          border: `1px solid ${C.border}`,
+          borderRadius: "4px",
+          color: C.text,
+          cursor: "pointer",
+          padding: "4px",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transition: "all 0.12s ease",
+        });
+        const maxIcon = svgIcon("expand", 11, C.text);
+        maxBtn.appendChild(maxIcon);
+
+        maxBtn.onmouseover = () => {
+          maxBtn.style.borderColor = LIME;
+          maxIcon.setAttribute("stroke", LIME);
+        };
+        maxBtn.onmouseout = () => {
+          maxBtn.style.borderColor = C.border;
+          maxIcon.setAttribute("stroke", C.text);
+        };
+
+        const clearBtn = mk("button", {
+          background: C.bg1,
+          border: `1px solid ${C.border}`,
+          borderRadius: "4px",
+          color: "#ff6666",
+          cursor: "pointer",
+          padding: "4px",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transition: "all 0.12s ease",
+        });
+        clearBtn.appendChild(svgIcon("close", 11, "#ff6666"));
+
+        actionGroup.append(maxBtn, clearBtn);
+        previewArea.append(thumbImg, metaCol, actionGroup);
+
+        box.append(emptyArea, previewArea, fileInput);
+
+        fileInput.onchange = async () => {
+          const file = fileInput.files[0];
+          if (!file) return;
+
+          const formData = new FormData();
+          formData.append("image", file);
+          formData.append("overwrite", "true");
+
+          try {
+            const res = await fetch("/upload/image", { method: "POST", body: formData });
+            const data = await res.json();
+            const serverFileName = data.name || file.name;
+
+            const objectUrl = URL.createObjectURL(file);
+            const tempImg = new Image();
+            tempImg.onload = () => {
+              const w = tempImg.naturalWidth;
+              const h = tempImg.naturalHeight;
+              const imgObj = { name: serverFileName, url: objectUrl, width: w, height: h };
+
+              if (slotKey === 1) imgData1 = imgObj;
+              else imgData2 = imgObj;
+
+              thumbImg.src = objectUrl;
+              nameLbl.textContent = serverFileName;
+              dimBadge.textContent = `${w} × ${h} px`;
+
+              emptyArea.style.display = "none";
+              previewArea.style.display = "flex";
+
+              maxBtn.onclick = (e) => {
+                e.stopPropagation();
+                openImagePreview(objectUrl, title, w, h);
+              };
+            };
+            tempImg.src = objectUrl;
+          } catch (e) {
+            console.error("Image upload error:", e);
+          }
+        };
+
+        clearBtn.onclick = (e) => {
+          e.stopPropagation();
+          fileInput.value = "";
+          if (slotKey === 1) imgData1 = null;
+          else imgData2 = null;
+
+          previewArea.style.display = "none";
+          emptyArea.style.display = "flex";
+        };
+
+        return box;
+      };
+
+      const box1 = createImgUploadBox("START FRAME (First Frame)", 1);
+      const box2 = createImgUploadBox("END FRAME (Last Frame - Optional)", 2);
+      slotCard.append(box1, box2);
       leftCol.appendChild(slotCard);
 
       // BIG GREEN GENERATE BUTTON with Sparkle Vector Icon
@@ -2120,6 +2287,64 @@ app.registerExtension({
         }
       };
 
+      // ── FULLSCREEN IMAGE PREVIEW OVERLAY (Maximise Button) ───────────────────
+      const imagePreviewOverlay = mk("div", {
+        position: "absolute",
+        top: "0",
+        left: "0",
+        right: "0",
+        bottom: "0",
+        width: "100%",
+        height: "100%",
+        background: "rgba(10, 10, 10, 0.95)",
+        backdropFilter: "blur(10px)",
+        zIndex: "120",
+        display: "none",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+        boxSizing: "border-box",
+        borderRadius: "12px",
+        opacity: "0",
+        transform: "scale(0.96)",
+        transition: "opacity .22s ease, transform .22s ease",
+      });
+
+      const imgPrevHdr = mk("div", {
+        width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px"
+      });
+      const imgPrevTitle = mk("span", { fontSize: "13px", fontWeight: "800", color: LIME });
+      const imgPrevDimensions = mk("span", { fontSize: "11px", fontWeight: "800", color: C.text, background: C.bg2, padding: "4px 10px", borderRadius: "4px", border: `1px solid ${C.border}` });
+      imgPrevHdr.append(imgPrevTitle, imgPrevDimensions);
+
+      const closeImgPrevBtn = mk("button", {
+        background: "#ff4444", color: "#fff", border: "none", borderRadius: "6px",
+        padding: "6px 16px", fontSize: "12px", fontWeight: "800", cursor: "pointer",
+        display: "inline-flex", alignItems: "center", gap: "6px", boxShadow: "0 2px 10px rgba(255, 68, 68, 0.4)"
+      });
+      closeImgPrevBtn.appendChild(svgIcon("close", 12, "#fff"));
+      closeImgPrevBtn.appendChild(document.createTextNode("Close"));
+      closeImgPrevBtn.onclick = (e) => {
+        e.stopPropagation();
+        closeOverlay(imagePreviewOverlay);
+      };
+      imgPrevHdr.appendChild(closeImgPrevBtn);
+
+      const imgPrevTag = mk("img", {
+        maxWidth: "100%", maxHeight: "calc(100% - 60px)", objectFit: "contain", borderRadius: "8px", border: `1px solid ${LIME}`, boxShadow: "0 8px 32px rgba(0, 255, 102, 0.25)"
+      });
+
+      imagePreviewOverlay.append(imgPrevHdr, imgPrevTag);
+      root.appendChild(imagePreviewOverlay);
+
+      const openImagePreview = (src, title, width, height) => {
+        imgPrevTitle.textContent = title;
+        imgPrevDimensions.textContent = `${width} × ${height} px`;
+        imgPrevTag.src = src;
+        openOverlay(imagePreviewOverlay);
+      };
+
       // ── GALLERY OVERLAY SYSTEM ──────────────────────────────────────────
       const galleryOverlay = mk("div", {
         position: "absolute",
@@ -2562,18 +2787,28 @@ app.registerExtension({
         tx(statusLabel, "Queuing workflow...");
         progressBarInner.style.width = "15%";
 
+        let activeWorkflowMode = S.mode;
+        if (S.mode === "I2V") {
+          if (imgData1 && imgData2) {
+            activeWorkflowMode = "image_to_video_fflf";
+          } else {
+            activeWorkflowMode = "image_to_video";
+          }
+        }
+
         try {
-          await executePixaromaWorkflow(S.mode, {
+          await executePixaromaWorkflow(activeWorkflowMode, {
             prompt: S.prompt,
             negative_prompt: S.negativePrompt,
             duration: S.duration,
             fps: S.fps,
-            motion_strength: S.motion_strength,
             cfg: S.cfg,
             seed: S.seed,
             loras: S.loras,
             width: S.width,
             height: S.height,
+            image_name_1: imgData1 ? imgData1.name : null,
+            image_name_2: imgData2 ? imgData2.name : null,
           }, statusLabel, progressBarInner);
         } catch (err) {
           genBtn.disabled = false;
