@@ -410,7 +410,10 @@ async function checkSystemValidation(mode) {
 }
 
 async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInner) {
-  const modeKey = mode === "image_to_video_fflf" ? "image_to_video_fflf" : (mode === "I2V" ? "image_to_video" : (mode === "R2V" ? "reference_to_video" : "text_to_video"));
+  const modeKey = mode === "image_to_video_fflf" ? "image_to_video_fflf" :
+                 (mode === "reference_to_video_sing" ? "reference_to_video_sing" :
+                 (mode === "R2V" ? "reference_to_video" :
+                 (mode === "I2V" ? "image_to_video" : "text_to_video")));
   let endpoint = `/minimax_h3/workflow_${modeKey}`;
 
   const res = await fetch(endpoint);
@@ -432,7 +435,7 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
       } else if (classType === "VAELoader") {
         inputs["vae_name"] = node.widgets_values[0] || "minimax_h3_video_vae_fp16.safetensors";
       } else if (classType === "UNETLoader") {
-        inputs["unet_name"] = node.widgets_values[0] || (mode === "R2V" ? "h3/minimax_h3_ref2va_pruned_int8_convrot.safetensors" : "h3/minimax_h3_fl2va_pruned_int8_convrot.safetensors");
+        inputs["unet_name"] = node.widgets_values[0] || (mode.includes("reference") || mode === "R2V" ? "h3/minimax_h3_ref2va_pruned_int8_convrot.safetensors" : "h3/minimax_h3_fl2va_pruned_int8_convrot.safetensors");
       } else if (classType === "PixaromaPrompt") {
         inputs["text"] = params.prompt;
       } else if (classType === "PixaromaSizes") {
@@ -462,6 +465,8 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
         } else {
           inputs["image"] = params.image_name_1 || node.widgets_values[0];
         }
+      } else if (classType === "PixaromaLoadAudio") {
+        inputs["audio"] = params.audio_name || node.widgets_values[0];
       }
     }
 
@@ -693,7 +698,7 @@ app.registerExtension({
         boxSizing: "border-box",
       });
 
-      // LEFT COLUMN CONTROLS
+      // LEFT COLUMN CONTROLS (with internal scroll containment to guarantee fixed node size)
       const leftCol = mk("div", {
         width: "320px",
         display: "flex",
@@ -701,6 +706,10 @@ app.registerExtension({
         gap: "10px",
         flexShrink: "0",
         boxSizing: "border-box",
+        maxHeight: "440px",
+        overflowY: "auto",
+        overflowX: "hidden",
+        paddingRight: "4px",
       });
 
       // ── ORIENTATION & SIZE SELECTOR (xFlow Custom UI) ─────────────────
@@ -1499,7 +1508,7 @@ app.registerExtension({
       seedBox.appendChild(seedCtrlRow);
       leftCol.appendChild(seedBox);
 
-      // ── MEDIA INPUT SLOT CARD (Dual Square Image Boxes for I2V & R2V modes) ──
+      // ── MEDIA INPUT SLOT CARD (Dynamic for I2V & R2V modes) ──
       const slotCard = mk("div", {
         display: "none",
         flexDirection: "column",
@@ -1513,8 +1522,57 @@ app.registerExtension({
 
       let imgData1 = null;
       let imgData2 = null;
+      let audioData = null;
 
-      const createImgUploadBox = (title, slotKey, isOptional = false) => {
+      // SPEAK vs SING Audio Sync Mode Pill Switch Bar for R2V mode
+      const r2vSwitchRow = mk("div", {
+        display: "none",
+        alignItems: "center",
+        gap: "4px",
+        background: C.bg1,
+        border: `1px solid ${C.border}`,
+        borderRadius: "6px",
+        padding: "2px",
+        boxSizing: "border-box",
+        width: "100%",
+        marginBottom: "2px",
+      });
+
+      const speakBtn = mk("button", {
+        flex: "1", padding: "4px 0", fontSize: "11px", fontWeight: "800",
+        borderRadius: "4px", border: "none", cursor: "pointer", transition: "all 0.15s ease",
+        background: LIME, color: "#111"
+      }, { textContent: "🗣 SPEAK" });
+
+      const singBtn = mk("button", {
+        flex: "1", padding: "4px 0", fontSize: "11px", fontWeight: "800",
+        borderRadius: "4px", border: "none", cursor: "pointer", transition: "all 0.15s ease",
+        background: "transparent", color: C.text
+      }, { textContent: "🎵 SING" });
+
+      const updateR2vSwitch = (type) => {
+        S.r2v_type = type;
+        persist();
+        if (type === "SPEAK") {
+          speakBtn.style.background = LIME;
+          speakBtn.style.color = "#111";
+          singBtn.style.background = "transparent";
+          singBtn.style.color = C.text;
+        } else {
+          singBtn.style.background = LIME;
+          singBtn.style.color = "#111";
+          speakBtn.style.background = "transparent";
+          speakBtn.style.color = C.text;
+        }
+      };
+
+      speakBtn.onclick = (e) => { e.stopPropagation(); updateR2vSwitch("SPEAK"); };
+      singBtn.onclick = (e) => { e.stopPropagation(); updateR2vSwitch("SING"); };
+
+      r2vSwitchRow.append(speakBtn, singBtn);
+      slotCard.appendChild(r2vSwitchRow);
+
+      const createImgUploadBox = (headerNode, slotKey) => {
         const box = mk("div", {
           background: C.bg1,
           border: `1px solid ${C.border}`,
@@ -1529,10 +1587,13 @@ app.registerExtension({
         });
 
         const hdr = mk("div", { display: "flex", justifyContent: "space-between", alignItems: "center" });
-        hdr.appendChild(cap(title));
+        if (typeof headerNode === "string") {
+          hdr.appendChild(cap(headerNode));
+        } else {
+          hdr.appendChild(headerNode);
+        }
         box.appendChild(hdr);
 
-        // Hidden file input appended to body to guarantee native file dialog opening
         const fileInput = document.createElement("input");
         fileInput.type = "file";
         fileInput.accept = "image/png, image/jpeg, image/jpg, image/webp";
@@ -1562,43 +1623,9 @@ app.registerExtension({
 
         emptyArea.append(uploadIcon, uploadTxt, extTxt);
 
-        emptyArea.onmouseover = () => {
-          emptyArea.style.borderColor = LIME;
-          emptyArea.style.background = "#222b24";
-        };
-        emptyArea.onmouseout = () => {
-          emptyArea.style.borderColor = C.border;
-          emptyArea.style.background = C.bg2;
-        };
-
-        emptyArea.onclick = (e) => {
-          e.stopPropagation();
-          e.preventDefault();
-          fileInput.click();
-        };
-
-        // Drag & Drop Support
-        emptyArea.ondragover = (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          emptyArea.style.borderColor = LIME;
-          emptyArea.style.background = "#222b24";
-        };
-        emptyArea.ondragleave = (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          emptyArea.style.borderColor = C.border;
-          emptyArea.style.background = C.bg2;
-        };
-        emptyArea.ondrop = (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          emptyArea.style.borderColor = C.border;
-          emptyArea.style.background = C.bg2;
-          if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-            handleFileSelect(e.dataTransfer.files[0]);
-          }
-        };
+        emptyArea.onmouseover = () => { emptyArea.style.borderColor = LIME; emptyArea.style.background = "#222b24"; };
+        emptyArea.onmouseout = () => { emptyArea.style.borderColor = C.border; emptyArea.style.background = C.bg2; };
+        emptyArea.onclick = (e) => { e.stopPropagation(); e.preventDefault(); fileInput.click(); };
 
         const previewArea = mk("div", {
           display: "none",
@@ -1612,83 +1639,23 @@ app.registerExtension({
           boxSizing: "border-box",
         });
 
-        const thumbImg = mk("img", {
-          width: "100%",
-          height: "90px",
-          objectFit: "cover",
-          display: "block",
-        });
-
-        // Overlay Action Buttons at top right of image
-        const actionGroup = mk("div", {
-          position: "absolute",
-          top: "4px",
-          right: "4px",
-          display: "flex",
-          alignItems: "center",
-          gap: "4px",
-          zIndex: "5",
-        });
+        const thumbImg = mk("img", { width: "100%", height: "90px", objectFit: "cover", display: "block" });
+        const actionGroup = mk("div", { position: "absolute", top: "4px", right: "4px", display: "flex", alignItems: "center", gap: "4px", zIndex: "5" });
 
         const maxBtn = mk("button", {
-          background: "rgba(10, 10, 10, 0.8)",
-          border: `1px solid ${C.border}`,
-          borderRadius: "4px",
-          color: "#fff",
-          cursor: "pointer",
-          padding: "3px 5px",
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          backdropFilter: "blur(4px)",
-          transition: "all 0.12s ease",
+          background: "rgba(10, 10, 10, 0.8)", border: `1px solid ${C.border}`, borderRadius: "4px", color: "#fff", cursor: "pointer", padding: "3px 5px", display: "inline-flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)"
         });
         const maxIcon = svgIcon("expand", 11, "#fff");
         maxBtn.appendChild(maxIcon);
 
-        maxBtn.onmouseover = () => {
-          maxBtn.style.borderColor = LIME;
-          maxIcon.setAttribute("stroke", LIME);
-        };
-        maxBtn.onmouseout = () => {
-          maxBtn.style.borderColor = C.border;
-          maxIcon.setAttribute("stroke", "#fff");
-        };
-
         const clearBtn = mk("button", {
-          background: "rgba(10, 10, 10, 0.8)",
-          border: `1px solid ${C.border}`,
-          borderRadius: "4px",
-          color: "#ff6666",
-          cursor: "pointer",
-          padding: "3px 5px",
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          backdropFilter: "blur(4px)",
-          transition: "all 0.12s ease",
+          background: "rgba(10, 10, 10, 0.8)", border: `1px solid ${C.border}`, borderRadius: "4px", color: "#ff6666", cursor: "pointer", padding: "3px 5px", display: "inline-flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)"
         });
         clearBtn.appendChild(svgIcon("close", 11, "#ff6666"));
 
         actionGroup.append(maxBtn, clearBtn);
-
-        // Bottom Dimensions Overlay Badge
         const dimBadge = mk("div", {
-          position: "absolute",
-          bottom: "0",
-          left: "0",
-          right: "0",
-          background: "rgba(10, 10, 10, 0.85)",
-          color: LIME,
-          fontSize: "9px",
-          fontWeight: "800",
-          padding: "3px 6px",
-          textAlign: "center",
-          backdropFilter: "blur(4px)",
-          borderTop: `1px solid ${C.border}`,
-          whiteSpace: "nowrap",
-          overflow: "hidden",
-          textOverflow: "ellipsis",
+          position: "absolute", bottom: "0", left: "0", right: "0", background: "rgba(10, 10, 10, 0.85)", color: LIME, fontSize: "9px", fontWeight: "800", padding: "3px 6px", textAlign: "center", backdropFilter: "blur(4px)", borderTop: `1px solid ${C.border}`, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
         }, { textContent: "" });
 
         previewArea.append(thumbImg, actionGroup, dimBadge);
@@ -1696,59 +1663,149 @@ app.registerExtension({
 
         const handleFileSelect = async (file) => {
           if (!file) return;
-
           const formData = new FormData();
           formData.append("image", file);
           formData.append("overwrite", "true");
-
           try {
             const res = await fetch("/upload/image", { method: "POST", body: formData });
             const data = await res.json();
             const serverFileName = data.name || file.name;
-
             const objectUrl = URL.createObjectURL(file);
             const tempImg = new Image();
             tempImg.onload = () => {
               const w = tempImg.naturalWidth;
               const h = tempImg.naturalHeight;
               const imgObj = { name: serverFileName, url: objectUrl, width: w, height: h };
-
               if (slotKey === 1) imgData1 = imgObj;
               else imgData2 = imgObj;
-
               thumbImg.src = objectUrl;
               dimBadge.textContent = `${w} × ${h} px • ${serverFileName}`;
-
               emptyArea.style.display = "none";
               previewArea.style.display = "flex";
-
-              maxBtn.onclick = (e) => {
-                e.stopPropagation();
-                openImagePreview(objectUrl, title, w, h);
-              };
+              maxBtn.onclick = (e) => { e.stopPropagation(); openImagePreview(objectUrl, typeof headerNode === "string" ? headerNode : headerNode.textContent, w, h); };
             };
             tempImg.src = objectUrl;
-          } catch (e) {
-            console.error("Image upload failed:", e);
-          }
+          } catch (e) { console.error("Image upload failed:", e); }
         };
 
-        fileInput.onchange = () => {
-          if (fileInput.files && fileInput.files[0]) {
-            handleFileSelect(fileInput.files[0]);
-          }
-        };
-
+        fileInput.onchange = () => { if (fileInput.files && fileInput.files[0]) handleFileSelect(fileInput.files[0]); };
         clearBtn.onclick = (e) => {
           e.stopPropagation();
           fileInput.value = "";
           if (slotKey === 1) imgData1 = null;
           else imgData2 = null;
-
           previewArea.style.display = "none";
           emptyArea.style.display = "flex";
         };
+        return box;
+      };
 
+      const createAudioUploadBox = () => {
+        const box = mk("div", {
+          background: C.bg1,
+          border: `1px solid ${C.border}`,
+          borderRadius: "6px",
+          padding: "8px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "6px",
+          boxSizing: "border-box",
+          position: "relative",
+          minHeight: "135px",
+        });
+
+        const hdr = mk("div", { display: "flex", justifyContent: "space-between", alignItems: "center" });
+        hdr.appendChild(cap("AUDIO FILE"));
+        box.appendChild(hdr);
+
+        const audioInput = document.createElement("input");
+        audioInput.type = "file";
+        audioInput.accept = "audio/mp3, audio/wav, audio/mpeg, audio/flac, audio/m4a, audio/x-wav";
+        audioInput.style.display = "none";
+        document.body.appendChild(audioInput);
+
+        const emptyArea = mk("div", {
+          flex: "1",
+          border: `1px dashed ${C.border}`,
+          borderRadius: "4px",
+          padding: "10px 4px",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: "4px",
+          cursor: "pointer",
+          background: C.bg2,
+          transition: "all 0.15s ease",
+          textAlign: "center",
+          boxSizing: "border-box",
+        });
+
+        const uploadIcon = svgIcon("sparkle", 16, LIME);
+        const uploadTxt = mk("span", { fontSize: "11px", fontWeight: "800", color: LIME }, { textContent: "Upload Audio" });
+        const extTxt = mk("span", { fontSize: "9px", fontWeight: "600", color: C.muted }, { textContent: "(.mp3, .wav, .flac)" });
+
+        emptyArea.append(uploadIcon, uploadTxt, extTxt);
+
+        emptyArea.onmouseover = () => { emptyArea.style.borderColor = LIME; emptyArea.style.background = "#222b24"; };
+        emptyArea.onmouseout = () => { emptyArea.style.borderColor = C.border; emptyArea.style.background = C.bg2; };
+        emptyArea.onclick = (e) => { e.stopPropagation(); e.preventDefault(); audioInput.click(); };
+
+        const previewArea = mk("div", {
+          display: "none",
+          flexDirection: "column",
+          position: "relative",
+          width: "100%",
+          flex: "1",
+          borderRadius: "4px",
+          overflow: "hidden",
+          border: `1px solid ${LIME}`,
+          background: C.bg2,
+          padding: "6px",
+          boxSizing: "border-box",
+          justifyContent: "center",
+          alignItems: "center",
+          gap: "4px",
+        });
+
+        const nameLbl = mk("span", { fontSize: "10px", fontWeight: "700", color: LIME, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+        const audioPlayer = mk("audio", { controls: true, style: "width: 100%; height: 26px; outline: none;" });
+
+        const clearBtn = mk("button", {
+          position: "absolute", top: "4px", right: "4px", background: "rgba(10, 10, 10, 0.8)", border: `1px solid ${C.border}`, borderRadius: "4px", color: "#ff6666", cursor: "pointer", padding: "3px 5px", display: "inline-flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)", zIndex: "5"
+        });
+        clearBtn.appendChild(svgIcon("close", 11, "#ff6666"));
+
+        previewArea.append(clearBtn, nameLbl, audioPlayer);
+        box.append(emptyArea, previewArea);
+
+        const handleAudioSelect = async (file) => {
+          if (!file) return;
+          const formData = new FormData();
+          formData.append("image", file);
+          formData.append("overwrite", "true");
+          try {
+            const res = await fetch("/upload/image", { method: "POST", body: formData });
+            const data = await res.json();
+            const serverFileName = data.name || file.name;
+            const objectUrl = URL.createObjectURL(file);
+            audioData = { name: serverFileName, url: objectUrl };
+            audioPlayer.src = objectUrl;
+            nameLbl.textContent = serverFileName;
+            emptyArea.style.display = "none";
+            previewArea.style.display = "flex";
+          } catch (e) { console.error("Audio upload failed:", e); }
+        };
+
+        audioInput.onchange = () => { if (audioInput.files && audioInput.files[0]) handleAudioSelect(audioInput.files[0]); };
+        clearBtn.onclick = (e) => {
+          e.stopPropagation();
+          audioInput.value = "";
+          audioData = null;
+          audioPlayer.src = "";
+          previewArea.style.display = "none";
+          emptyArea.style.display = "flex";
+        };
         return box;
       };
 
@@ -1760,9 +1817,12 @@ app.registerExtension({
         boxSizing: "border-box",
       });
 
-      const box1 = createImgUploadBox("START FRAME", 1, false);
-      const box2 = createImgUploadBox("END FRAME (OPT)", 2, true);
-      slotGrid.append(box1, box2);
+      const box1HeaderLbl = cap("START FRAME");
+      const box1 = createImgUploadBox(box1HeaderLbl, 1);
+      const box2Img = createImgUploadBox("END FRAME (OPT)", 2);
+      const box2Audio = createAudioUploadBox();
+
+      slotGrid.append(box1, box2Img, box2Audio);
       slotCard.appendChild(slotGrid);
       leftCol.appendChild(slotCard);
 
@@ -2870,10 +2930,23 @@ app.registerExtension({
           orientSizeBox.style.display = "flex";
           longestSideBox.style.display = "none";
           slotCard.style.display = "none";
-        } else {
+        } else if (m === "I2V") {
           orientSizeBox.style.display = "none";
           longestSideBox.style.display = "flex";
           slotCard.style.display = "flex";
+          r2vSwitchRow.style.display = "none";
+          box1HeaderLbl.textContent = "START FRAME";
+          box2Img.style.display = "flex";
+          box2Audio.style.display = "none";
+        } else if (m === "R2V") {
+          orientSizeBox.style.display = "none";
+          longestSideBox.style.display = "flex";
+          slotCard.style.display = "flex";
+          r2vSwitchRow.style.display = "flex";
+          updateR2vSwitch(S.r2v_type || "SPEAK");
+          box1HeaderLbl.textContent = "REF IMAGE";
+          box2Img.style.display = "none";
+          box2Audio.style.display = "flex";
         }
 
         self.setSize([NODE_W, NODE_H + 50]);
@@ -2908,6 +2981,12 @@ app.registerExtension({
           } else {
             activeWorkflowMode = "image_to_video";
           }
+        } else if (S.mode === "R2V") {
+          if (S.r2v_type === "SING") {
+            activeWorkflowMode = "reference_to_video_sing";
+          } else {
+            activeWorkflowMode = "reference_to_video";
+          }
         }
 
         try {
@@ -2923,6 +3002,7 @@ app.registerExtension({
             height: S.height,
             image_name_1: imgData1 ? imgData1.name : null,
             image_name_2: imgData2 ? imgData2.name : null,
+            audio_name: audioData ? audioData.name : null,
           }, statusLabel, progressBarInner);
         } catch (err) {
           genBtn.disabled = false;
