@@ -153,7 +153,9 @@ const ICONS = {
   sparkle: ["M12 3v3m0 12v3M3 12h3m12 0h3M5.637 5.637l2.122 2.122m8.485 8.485l2.122 2.122M5.637 18.363l2.122-2.122m8.485-8.485l2.122-2.122"],
   chevronDown: "M6 9l6 6 6-6",
   mic: ["M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3z", "M19 10v2a7 7 0 01-14 0v-2", "M12 19v3"],
-  music: ["M9 18V5l12-2v13", "M6 21a3 3 0 100-6 3 3 0 000 6z", "M18 19a3 3 0 100-6 3 3 0 000 6z"]
+  music: ["M9 18V5l12-2v13", "M6 21a3 3 0 100-6 3 3 0 000 6z", "M18 19a3 3 0 100-6 3 3 0 000 6z"],
+  github: ["M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"],
+  discord: "M18.8 4.2c-1.3-.6-2.8-1-4.3-1.2 0 0-.2.4-.4.8-1.7-.2-3.4-.2-5.1 0-.2-.4-.4-.8-.4-.8-1.5.2-3 .6-4.3 1.2C1.7 8.1 1 12 1.3 15.8c1.8 1.3 3.5 2.1 5.1 2.6.4-.6.8-1.2 1.1-1.8-1.2-.4-1.7-.9-2.3-1.5.1.1.2.2.3.2 2.2 1 4.6 1.5 7.1 1.5 2.5 0 4.9-.5 7.1-1.5.1-.1.2-.2.3-.2-.5.6-1.1 1.1-2.3 1.5.3.6.7 1.2 1.1 1.8 1.7-.5 3.4-1.3 5.1-2.6.5-4.4-.8-8.2-3.1-11.6zM8.5 13.5c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2zm7 0c-1 0-1.8-.9-1.8-2s.8-2 1.8-2 1.8.9 1.8 2-.8 2-1.8 2z"
 };
 
 const svgIcon = (name, size = 14, color = "currentColor", strokeWidth = 2) => {
@@ -3801,6 +3803,223 @@ app.registerExtension({
         if (previewSourceNode) try { previewSourceNode.stop(); } catch(e){}
         closeOverlay(audioEditorOverlay);
       };
+
+      // ── HELP & DOCUMENTATION MODAL OVERLAY ─────────────────────────────
+      const helpOverlay = mk("div", {
+        position: "fixed",
+        top: "0",
+        left: "0",
+        width: "100vw",
+        height: "100vh",
+        background: "rgba(0, 0, 0, 0.85)",
+        backdropFilter: "blur(12px)",
+        zIndex: "999999",
+        display: "none",
+        alignItems: "center",
+        justifyContent: "center",
+        boxSizing: "border-box",
+      });
+
+      const helpContainer = mk("div", {
+        width: "720px",
+        maxHeight: "90vh",
+        background: C.bg0,
+        border: `1px solid ${LIME}`,
+        borderRadius: "12px",
+        boxShadow: "0 20px 50px rgba(0,0,0,0.9), 0 0 30px rgba(0,255,102,0.25)",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        boxSizing: "border-box",
+      });
+
+      const helpHeader = mk("div", {
+        padding: "16px 20px",
+        background: C.bg2,
+        borderBottom: `1px solid ${C.border}`,
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+      });
+
+      const helpTitleGroup = mk("div", { display: "flex", alignItems: "center", gap: "10px" });
+      const helpTitleIcon = svgIcon("help", 18, LIME);
+      const helpTitleText = mk("span", { fontSize: "15px", fontWeight: "900", color: "#fff", letterSpacing: ".04em" }, { textContent: "xFlow Minimax H3 - User Guide & Credits" });
+      helpTitleGroup.append(helpTitleIcon, helpTitleText);
+
+      const helpCloseBtn = mk("button", {
+        padding: "6px 14px", fontSize: "11px", fontWeight: "700", background: "#ff4444", color: "#fff",
+        border: "none", borderRadius: "6px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px"
+      });
+      helpCloseBtn.append(svgIcon("close", 12, "#fff"), document.createTextNode("Close"));
+      helpHeader.append(helpTitleGroup, helpCloseBtn);
+
+      const helpBody = mk("div", {
+        padding: "20px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "16px",
+        overflowY: "auto",
+        boxSizing: "border-box",
+        maxHeight: "calc(90vh - 70px)",
+      });
+
+      // SECTION 1: HOW TO USE
+      const secUse = mk("div", { display: "flex", flexDirection: "column", gap: "10px" });
+      secUse.appendChild(cap("📖 HOW TO USE XFLOW MINIMAX H3"));
+
+      const guideGrid = mk("div", { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" });
+
+      const createHelpCard = (title, items, iconName) => {
+        const card = mk("div", {
+          background: C.bg2, border: `1px solid ${C.border}`, borderRadius: "8px", padding: "12px",
+          display: "flex", flexDirection: "column", gap: "6px"
+        });
+        const cardHdr = mk("div", { display: "flex", alignItems: "center", gap: "6px", color: LIME, fontSize: "12px", fontWeight: "800" });
+        cardHdr.append(svgIcon(iconName, 14, LIME), document.createTextNode(title));
+        card.appendChild(cardHdr);
+
+        const list = mk("ul", { margin: "0", paddingLeft: "16px", fontSize: "11px", color: C.text, lineHeight: "1.5" });
+        items.forEach(it => {
+          const li = mk("li", {}, { textContent: it });
+          list.appendChild(li);
+        });
+        card.appendChild(list);
+        return card;
+      };
+
+      const cardT2V = createHelpCard("Text-to-Video (T2V)", [
+        "Select T2V tab in top bar.",
+        "Enter your prompt in bottom prompt box.",
+        "Set Orientation/Resolution, Duration (seconds), and Seed.",
+        "Click Generate to render video using Minimax H3 weights."
+      ], "t2v");
+
+      const cardI2V = createHelpCard("Image-to-Video (I2V)", [
+        "Select I2V tab in top bar.",
+        "Upload Start Frame image (and optional End Frame for FFLF interpolation).",
+        "Tweak CFG Scale and Motion parameters under Advanced Options.",
+        "Click Generate to animate your reference image."
+      ], "i2v");
+
+      const cardR2V = createHelpCard("Ref + Audio Sync (R2V)", [
+        "Select R2V tab in top bar.",
+        "Upload Reference Image and Audio file (.mp3, .wav, .flac).",
+        "Choose SPEAK (speech lip sync) or SING (singing sync).",
+        "Click Gear (⚙) to trim audio length using interactive Waveform Cropper.",
+        "Click Generate to render audio-synchronized video."
+      ], "r2v");
+
+      const cardAdv = createHelpCard("Advanced Options & LoRAs", [
+        "Expand ⚙ ADVANCED OPTIONS to adjust Longest Side resolution.",
+        "Set custom CFG Scale, FPS (24/30 FPS), and Seed value.",
+        "Click '+ Add LoRA' in prompt box to attach custom LoRA weights."
+      ], "settings");
+
+      guideGrid.append(cardT2V, cardI2V, cardR2V, cardAdv);
+      secUse.appendChild(guideGrid);
+      helpBody.appendChild(secUse);
+
+      // SECTION 2: ACKNOWLEDGEMENTS & EXTERNAL CREDIT
+      const secAck = mk("div", {
+        background: C.bg2, border: `1px solid ${C.border}`, borderRadius: "8px", padding: "14px",
+        display: "flex", flexDirection: "column", gap: "8px"
+      });
+      const ackHdr = mk("div", { fontSize: "12px", fontWeight: "800", color: LIME, letterSpacing: ".04em" }, { textContent: "🙏 ACKNOWLEDGEMENTS & SPECIAL THANKS" });
+      const ackTxt = mk("div", { fontSize: "11px", color: C.text, lineHeight: "1.5" }, {
+        textContent: "Special thanks to Pixaroma (ComfyUI-Pixaroma) for their outstanding open-source ComfyUI custom nodes, audio sync workflows, and architecture inspiration that made this integrated one-node interface possible."
+      });
+
+      const pixaromaBtn = mk("a", {
+        href: "https://github.com/Pixaroma/ComfyUI-Pixaroma",
+        target: "_blank",
+        rel: "noopener noreferrer",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "6px",
+        padding: "6px 12px",
+        fontSize: "11px",
+        fontWeight: "800",
+        background: C.bg1,
+        color: LIME,
+        border: `1px solid ${LIME}`,
+        borderRadius: "6px",
+        textDecoration: "none",
+        width: "fit-content",
+        transition: "all 0.15s ease",
+      });
+      pixaromaBtn.append(svgIcon("link", 13, LIME), document.createTextNode("Visit ComfyUI-Pixaroma GitHub"));
+      secAck.append(ackHdr, ackTxt, pixaromaBtn);
+      helpBody.appendChild(secAck);
+
+      // SECTION 3: COMMUNITY & SOCIAL LINKS (Discord + GitHub Profile)
+      const secSocial = mk("div", { display: "flex", flexDirection: "column", gap: "8px" });
+      secSocial.appendChild(cap("💬 JOIN COMMUNITY & SOCIAL LINKS"));
+
+      const socialRow = mk("div", { display: "flex", gap: "10px" });
+
+      // Discord Button
+      const discordBtn = mk("a", {
+        href: "https://discord.gg/dnfaGvcsE",
+        target: "_blank",
+        rel: "noopener noreferrer",
+        flex: "1",
+        padding: "10px 14px",
+        background: "#5865F2",
+        color: "#ffffff",
+        borderRadius: "8px",
+        textDecoration: "none",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "8px",
+        fontSize: "12px",
+        fontWeight: "800",
+        boxShadow: "0 4px 14px rgba(88, 101, 242, 0.35)",
+        transition: "all 0.15s ease",
+      });
+      const discordIcon = svgIcon("discord", 16, "#ffffff");
+      discordBtn.append(discordIcon, document.createTextNode("Join Discord Server"));
+
+      discordBtn.onmouseover = () => { discordBtn.style.transform = "translateY(-2px)"; discordBtn.style.boxShadow = "0 6px 20px rgba(88, 101, 242, 0.55)"; };
+      discordBtn.onmouseout = () => { discordBtn.style.transform = "translateY(0)"; discordBtn.style.boxShadow = "0 4px 14px rgba(88, 101, 242, 0.35)"; };
+
+      // GitHub Profile Button
+      const githubBtn = mk("a", {
+        href: "https://github.com/navalyalgam97/xFlow-Minimax-H3",
+        target: "_blank",
+        rel: "noopener noreferrer",
+        flex: "1",
+        padding: "10px 14px",
+        background: C.bg2,
+        color: "#ffffff",
+        border: `1px solid ${C.border}`,
+        borderRadius: "8px",
+        textDecoration: "none",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "8px",
+        fontSize: "12px",
+        fontWeight: "800",
+        transition: "all 0.15s ease",
+      });
+      const githubIcon = svgIcon("github", 16, "#ffffff");
+      githubBtn.append(githubIcon, document.createTextNode("GitHub Repository"));
+
+      githubBtn.onmouseover = () => { githubBtn.style.borderColor = LIME; githubBtn.style.color = LIME; githubIcon.setAttribute("stroke", LIME); };
+      githubBtn.onmouseout = () => { githubBtn.style.borderColor = C.border; githubBtn.style.color = "#ffffff"; githubIcon.setAttribute("stroke", "#ffffff"); };
+
+      socialRow.append(discordBtn, githubBtn);
+      secSocial.appendChild(socialRow);
+      helpBody.appendChild(secSocial);
+
+      helpContainer.append(helpHeader, helpBody);
+      helpOverlay.appendChild(helpContainer);
+      document.body.appendChild(helpOverlay);
+
+      helpBtn.onclick = () => openOverlay(helpOverlay);
+      helpCloseBtn.onclick = () => closeOverlay(helpOverlay);
 
       lsGearBtnGroup.onclick = (e) => {
         e.stopPropagation();
