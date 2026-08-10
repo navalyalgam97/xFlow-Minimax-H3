@@ -2069,7 +2069,17 @@ app.registerExtension({
 
             gearBtn.onclick = (e) => {
               e.stopPropagation();
-              openAudioEditor(currentUploadedAudioFile || file, serverFileName);
+              openAudioEditor({
+                file: currentUploadedAudioFile || file,
+                fileName: serverFileName,
+                onCropSuccess: (newFileName, newUrl, newFile, durationSec) => {
+                  currentUploadedAudioFile = newFile;
+                  audioData = { name: newFileName, url: newUrl, file: newFile };
+                  audioPlayer.src = newUrl;
+                  try { audioPlayer.load(); } catch(err){}
+                  nameLbl.textContent = `${newFileName} (${durationSec}s)`;
+                }
+              });
             };
           } catch (e) { console.error("Audio upload failed:", e); }
         };
@@ -3664,9 +3674,22 @@ app.registerExtension({
         activeDragMode = null;
       });
 
-      const openAudioEditor = async (file, fileName) => {
+      let currentOnCropSuccess = null;
+
+      const openAudioEditor = async (params) => {
+        let file = params;
+        let fileName = "";
+        if (params && typeof params === "object" && params.file) {
+          file = params.file;
+          fileName = params.fileName || file.name;
+          currentOnCropSuccess = params.onCropSuccess || null;
+        } else {
+          fileName = arguments[1] || (file ? file.name : "");
+          currentOnCropSuccess = null;
+        }
+
         currentRawAudioFile = file;
-        aeFileNameLbl.textContent = fileName || file.name || "audio_file.wav";
+        aeFileNameLbl.textContent = fileName || (file ? file.name : "audio_file.wav");
         openOverlay(audioEditorOverlay);
 
         try {
@@ -3754,14 +3777,15 @@ app.registerExtension({
               const serverFileName = data.name || croppedFile.name;
               const objectUrl = URL.createObjectURL(croppedBlob);
 
-              audioData = { name: serverFileName, url: objectUrl, file: croppedFile };
-              audioPlayer.src = objectUrl;
-              nameLbl.textContent = `${serverFileName} (${(et - st).toFixed(1)}s)`;
+              if (currentOnCropSuccess) {
+                currentOnCropSuccess(serverFileName, objectUrl, croppedFile, (et - st).toFixed(1));
+              }
 
               if (previewSourceNode) try { previewSourceNode.stop(); } catch(e){}
               closeOverlay(audioEditorOverlay);
             } catch (err) {
               console.error("Failed to crop audio:", err);
+              alert("Audio crop failed: " + (err.message || err));
             } finally {
               aeApplyBtn.disabled = false;
               aeApplyBtn.lastChild.textContent = "Apply Crop";
