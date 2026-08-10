@@ -1731,7 +1731,7 @@ app.registerExtension({
       });
 
       const box1 = createImgUploadBox("START FRAME", 1, false);
-      const box2 = createImgUploadBox("END FRAME (OPTIONAL)", 2, true);
+      const box2 = createImgUploadBox("END FRAME (OPT)", 2, true);
       slotGrid.append(box1, box2);
       slotCard.appendChild(slotGrid);
       leftCol.appendChild(slotCard);
