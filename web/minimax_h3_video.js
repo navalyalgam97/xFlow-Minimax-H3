@@ -3257,8 +3257,8 @@ app.registerExtension({
       aeCanvasBox.appendChild(aeCanvas);
 
       const aeControlsGrid = mk("div", {
-        display: "grid",
-        gridTemplateColumns: "1fr 1fr",
+        display: "flex",
+        flexDirection: "column",
         gap: "12px",
         background: C.bg2,
         padding: "12px",
@@ -3266,21 +3266,49 @@ app.registerExtension({
         border: `1px solid ${C.border}`,
       });
 
+      // 1. Crop Start Position Slider
       const startBox = mk("div", { display: "flex", flexDirection: "column", gap: "4px" });
-      const startHdr = mk("div", { display: "flex", justifyContent: "space-between", fontSize: "10px", fontWeight: "700", color: C.muted });
+      const startHdr = mk("div", { display: "flex", justifyContent: "space-between", fontSize: "11px", fontWeight: "800", color: C.text });
       const startValLbl = mk("span", { color: LIME }, { textContent: "0.0s" });
-      startHdr.append(document.createTextNode("START TIME"), startValLbl);
+      startHdr.append(document.createTextNode("CROP START POSITION"), startValLbl);
       const startSlider = mk("input", { type: "range", min: "0", max: "100", step: "0.1", value: "0", style: "width: 100%; cursor: pointer;" });
       startBox.append(startHdr, startSlider);
 
-      const endBox = mk("div", { display: "flex", flexDirection: "column", gap: "4px" });
-      const endHdr = mk("div", { display: "flex", justifyContent: "space-between", fontSize: "10px", fontWeight: "700", color: C.muted });
-      const endValLbl = mk("span", { color: LIME }, { textContent: "4.0s" });
-      endHdr.append(document.createTextNode("END TIME"), endValLbl);
-      const endSlider = mk("input", { type: "range", min: "0", max: "100", step: "0.1", value: "4", style: "width: 100%; cursor: pointer;" });
-      endBox.append(endHdr, endSlider);
+      // 2. Crop Length / Duration Selector
+      const lenBox = mk("div", { display: "flex", flexDirection: "column", gap: "6px" });
+      const lenHdr = mk("div", { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "11px", fontWeight: "800", color: C.text });
+      const lenValLbl = mk("span", { color: LIME }, { textContent: "4.0s" });
+      lenHdr.append(document.createTextNode("CROP DURATION / LENGTH"), lenValLbl);
 
-      aeControlsGrid.append(startBox, endBox);
+      const lenPillsRow = mk("div", { display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" });
+
+      const createLenPill = (label, valSec) => {
+        const btn = mk("button", {
+          padding: "4px 8px", fontSize: "10px", fontWeight: "700", borderRadius: "4px",
+          border: `1px solid ${C.border}`, background: C.bg1, color: C.text, cursor: "pointer",
+          transition: "all 0.12s ease"
+        }, { textContent: label });
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          setCropLength(valSec);
+        };
+        return btn;
+      };
+
+      const matchVideoBtn = createLenPill(`Match Video (${S.duration || 4}s)`, parseFloat(S.duration) || 4.0);
+      const pill5s = createLenPill("5.0s", 5.0);
+      const pill10s = createLenPill("10.0s", 10.0);
+      const pillFull = createLenPill("Full Audio", null);
+
+      const lenNumInput = mk("input", {
+        type: "number", min: "0.5", max: "600", step: "0.1", value: "4.0",
+        style: "width: 65px; padding: 3px 6px; font-size: 11px; font-weight: 800; background: #111; color: #00ff66; border: 1px solid #2a2a2a; border-radius: 4px; text-align: center; outline: none;"
+      });
+
+      lenPillsRow.append(matchVideoBtn, pill5s, pill10s, pillFull, mk("span", { fontSize: "10px", color: C.muted }, { textContent: "Custom (sec):" }), lenNumInput);
+      lenBox.append(lenHdr, lenPillsRow);
+
+      aeControlsGrid.append(startBox, lenBox);
       aeBody.append(aeInfoBar, aeCanvasBox, aeControlsGrid);
 
       const aeFooter = mk("div", {
@@ -3321,12 +3349,40 @@ app.registerExtension({
       aeFooter.append(aeLeftActions, aeApplyBtn);
       audioEditorContainer.append(aeHeader, aeBody, aeFooter);
       audioEditorOverlay.appendChild(audioEditorContainer);
-      root.appendChild(audioEditorOverlay);
+      document.body.appendChild(audioEditorOverlay);
 
       let currentAudioBuffer = null;
       let currentRawAudioFile = null;
       let previewAudioCtx = null;
       let previewSourceNode = null;
+
+      const setCropLength = (valSec) => {
+        const totalDur = currentAudioBuffer ? currentAudioBuffer.duration : 100;
+        let targetL = valSec == null ? totalDur : valSec;
+        targetL = Math.min(totalDur, Math.max(0.5, targetL));
+        lenNumInput.value = targetL.toFixed(1);
+        updateCropView();
+      };
+
+      const updateCropView = () => {
+        if (!currentAudioBuffer) return;
+        const totalDur = currentAudioBuffer.duration;
+        let cropLen = parseFloat(lenNumInput.value) || 4.0;
+        cropLen = Math.min(totalDur, Math.max(0.5, cropLen));
+
+        startSlider.max = Math.max(0, totalDur - cropLen).toFixed(1);
+        let st = parseFloat(startSlider.value) || 0;
+        if (st > totalDur - cropLen) {
+          st = Math.max(0, totalDur - cropLen);
+          startSlider.value = st.toFixed(1);
+        }
+        const et = Math.min(totalDur, st + cropLen);
+
+        startValLbl.textContent = `${st.toFixed(1)}s`;
+        lenValLbl.textContent = `${(et - st).toFixed(1)}s (Range: ${st.toFixed(1)}s ──► ${et.toFixed(1)}s)`;
+
+        drawAudioWaveform(aeCanvas, currentAudioBuffer, st, et);
+      };
 
       const openAudioEditor = async (file, fileName) => {
         currentRawAudioFile = file;
@@ -3339,39 +3395,23 @@ app.registerExtension({
           currentAudioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
 
           const totalDur = currentAudioBuffer.duration;
-          const targetDur = Math.min(totalDur, parseFloat(S.duration) || 4.0);
+          const initialCropLen = Math.min(totalDur, parseFloat(S.duration) || 4.0);
 
-          aeDurationBadge.textContent = `Total: ${totalDur.toFixed(1)}s | Target: ${targetDur.toFixed(1)}s`;
+          aeDurationBadge.textContent = `Total Length: ${totalDur.toFixed(1)}s | Video Target: ${parseFloat(S.duration) || 4.0}s`;
 
-          startSlider.max = totalDur.toFixed(1);
+          startSlider.max = Math.max(0, totalDur - initialCropLen).toFixed(1);
           startSlider.value = "0";
-          endSlider.max = totalDur.toFixed(1);
-          endSlider.value = targetDur.toFixed(1);
+          lenNumInput.value = initialCropLen.toFixed(1);
 
-          startValLbl.textContent = "0.0s";
-          endValLbl.textContent = `${targetDur.toFixed(1)}s`;
+          updateCropView();
 
-          drawAudioWaveform(aeCanvas, currentAudioBuffer, 0, targetDur);
-
-          const updateWaveformView = () => {
-            let st = parseFloat(startSlider.value);
-            let et = parseFloat(endSlider.value);
-            if (st >= et) {
-              st = Math.max(0, et - 0.5);
-              startSlider.value = st.toFixed(1);
-            }
-            startValLbl.textContent = `${st.toFixed(1)}s`;
-            endValLbl.textContent = `${et.toFixed(1)}s`;
-            drawAudioWaveform(aeCanvas, currentAudioBuffer, st, et);
-          };
-
-          startSlider.oninput = updateWaveformView;
-          endSlider.oninput = updateWaveformView;
+          startSlider.oninput = updateCropView;
+          lenNumInput.oninput = updateCropView;
 
           aeResetBtn.onclick = () => {
             startSlider.value = "0";
-            endSlider.value = Math.min(totalDur, parseFloat(S.duration) || 4.0).toFixed(1);
-            updateWaveformView();
+            lenNumInput.value = Math.min(totalDur, parseFloat(S.duration) || 4.0).toFixed(1);
+            updateCropView();
           };
 
           let isPlayingSelection = false;
@@ -3386,8 +3426,9 @@ app.registerExtension({
               return;
             }
 
-            const st = parseFloat(startSlider.value);
-            const et = parseFloat(endSlider.value);
+            const st = parseFloat(startSlider.value) || 0;
+            const cropLen = parseFloat(lenNumInput.value) || 4.0;
+            const et = Math.min(totalDur, st + cropLen);
             const dur = et - st;
 
             if (previewAudioCtx) previewAudioCtx.close();
@@ -3413,8 +3454,9 @@ app.registerExtension({
           };
 
           aeApplyBtn.onclick = async () => {
-            const st = parseFloat(startSlider.value);
-            const et = parseFloat(endSlider.value);
+            const st = parseFloat(startSlider.value) || 0;
+            const cropLen = parseFloat(lenNumInput.value) || 4.0;
+            const et = Math.min(totalDur, st + cropLen);
 
             aeApplyBtn.disabled = true;
             aeApplyBtn.lastChild.textContent = "Cropping...";
