@@ -206,6 +206,36 @@ const cap = (t) =>
     t
   );
 
+const createAspectIcon = (chip, isSelected) => {
+  const strokeColor = isSelected ? "#111" : C.text;
+  let w = 10, h = 10, isDashed = false;
+
+  if (chip === "keep") { w = 11; h = 9; isDashed = true; }
+  else if (chip === "1:1") { w = 10; h = 10; }
+  else if (chip === "16:9") { w = 14; h = 8; }
+  else if (chip === "9:16") { w = 8; h = 14; }
+  else if (chip === "4:3") { w = 12; h = 9; }
+  else if (chip === "3:4") { w = 9; h = 12; }
+  else if (chip === "3:2") { w = 13; h = 8.5; }
+  else if (chip === "2:3") { w = 8.5; h = 13; }
+  else if (chip === "5:4") { w = 11; h = 9; }
+  else if (chip === "4:5") { w = 9; h = 11; }
+  else if (chip === "21:9") { w = 15; h = 6.5; }
+  else if (chip === "9:21") { w = 6.5; h = 15; }
+  else if (chip === "2:1") { w = 14; h = 7; }
+  else if (chip === "1:2") { w = 7; h = 14; }
+
+  return mk("span", {
+    display: "inline-block",
+    width: `${w}px`,
+    height: `${h}px`,
+    border: `${isDashed ? "1px dashed" : "1px solid"} ${strokeColor}`,
+    borderRadius: "1px",
+    boxSizing: "border-box",
+    flexShrink: "0",
+  });
+};
+
 const formatBytes = (bytes) => {
   if (!bytes || bytes === 0) return "0 B";
   const k = 1024;
@@ -1023,7 +1053,7 @@ app.registerExtension({
             gap: "3px",
           });
 
-          const chipIcon = mk("span", { display: "inline-block", width: "8px", height: "8px", border: `1px solid ${isSelected ? "#111" : C.text}`, borderRadius: "1px" });
+          const chipIcon = createAspectIcon(chip, isSelected);
           btn.append(chipIcon, document.createTextNode(chip));
 
           btn.onmouseover = () => { if (!isSelected) btn.style.borderColor = LIME; };
@@ -2744,8 +2774,12 @@ app.registerExtension({
           const btn = mk("button", {
             padding: "6px 2px", fontSize: "10px", fontWeight: "700", borderRadius: "4px",
             border: `1px solid ${isSelected ? LIME : C.border}`, background: isSelected ? LIME : C.bg2,
-            color: isSelected ? "#111" : C.text, cursor: "pointer", textAlign: "center"
-          }, { textContent: chip });
+            color: isSelected ? "#111" : C.text, cursor: "pointer", textAlign: "center",
+            display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "4px"
+          });
+
+          const chipIcon = createAspectIcon(chip, isSelected);
+          btn.append(chipIcon, document.createTextNode(chip));
 
           btn.onclick = (e) => {
             e.stopPropagation();
