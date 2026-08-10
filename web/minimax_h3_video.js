@@ -497,8 +497,7 @@ app.registerExtension({
         height: 480,
         duration: 4,
         fps: 24,
-        motion_strength: 0.5,
-        cfg: 7.5,
+        cfg: 1.0,
         seed: 0,
         prompt: "",
         negativePrompt: DEFAULT_NEG_PROMPT,
@@ -1164,38 +1163,140 @@ app.registerExtension({
       durFpsRow.appendChild(fpsBox);
       leftCol.appendChild(durFpsRow);
 
-      // Motion & CFG Scale Row
-      const motCfgRow = mk("div", { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" });
-
-      const motBox = mk("div", { background: C.bg2, padding: "8px 10px", borderRadius: "6px", border: `1px solid ${C.border}` });
-      motBox.appendChild(cap("MOTION STRENGTH"));
-      const motInput = mk("input", { type: "number", min: "0.0", max: "1.0", step: "0.1", value: S.motion_strength, width: "100%", background: C.bg1, color: C.text, border: `1px solid ${C.border}`, borderRadius: "4px", padding: "4px 8px", fontSize: "11px", outline: "none", boxSizing: "border-box" });
-      motInput.oninput = () => { S.motion_strength = motInput.value; persist(); };
-      motBox.appendChild(motInput);
-      motCfgRow.appendChild(motBox);
-
+      // CFG Scale Box (Default 1.0)
       const cfgBox = mk("div", { background: C.bg2, padding: "8px 10px", borderRadius: "6px", border: `1px solid ${C.border}` });
       cfgBox.appendChild(cap("CFG SCALE"));
-      const cfgInput = mk("input", { type: "number", min: "1", max: "20", step: "0.5", value: S.cfg, width: "100%", background: C.bg1, color: C.text, border: `1px solid ${C.border}`, borderRadius: "4px", padding: "4px 8px", fontSize: "11px", outline: "none", boxSizing: "border-box" });
-      cfgInput.oninput = () => { S.cfg = cfgInput.value; persist(); };
+      const cfgInput = mk("input", { type: "number", min: "1.0", max: "20.0", step: "0.5", value: S.cfg || 1.0, width: "100%", background: C.bg1, color: C.text, border: `1px solid ${C.border}`, borderRadius: "4px", padding: "4px 8px", fontSize: "11px", outline: "none", boxSizing: "border-box" });
+      cfgInput.oninput = () => { S.cfg = parseFloat(cfgInput.value) || 1.0; persist(); };
       cfgBox.appendChild(cfgInput);
-      motCfgRow.appendChild(cfgBox);
-      leftCol.appendChild(motCfgRow);
+      leftCol.appendChild(cfgBox);
 
-      // Seed Box with Shuffle Vector Icon
-      const seedBox = mk("div", { background: C.bg2, padding: "8px 10px", borderRadius: "6px", border: `1px solid ${C.border}` });
-      const seedHeader = mk("div", { display: "flex", justifyContent: "space-between", alignItems: "center" });
-      seedHeader.appendChild(cap("SEED (0 = RANDOM)"));
-      
-      const diceBtn = mk("button", { background: C.bg3, border: `1px solid ${C.border}`, borderRadius: "4px", cursor: "pointer", fontSize: "11px", padding: "3px 6px", color: C.text, display: "inline-flex", alignItems: "center" });
-      diceBtn.appendChild(svgIcon("random", 12, C.text));
-      seedHeader.appendChild(diceBtn);
-      seedBox.appendChild(seedHeader);
+      // SEED Control Box (Matching Screenshot 2 1:1 with xFlow Neon Green Shuffle Button)
+      const seedBox = mk("div", {
+        background: C.bg2,
+        padding: "8px 10px",
+        borderRadius: "6px",
+        border: `1px solid ${C.border}`,
+        display: "flex",
+        flexDirection: "column",
+        gap: "6px",
+        boxSizing: "border-box",
+      });
 
-      const seedInput = mk("input", { type: "number", value: S.seed, width: "100%", background: C.bg1, color: C.text, border: `1px solid ${C.border}`, borderRadius: "4px", padding: "4px 8px", fontSize: "11px", outline: "none", boxSizing: "border-box" });
-      seedInput.oninput = () => { S.seed = seedInput.value; persist(); };
-      diceBtn.onclick = () => { S.seed = 0; seedInput.value = 0; persist(); };
-      seedBox.appendChild(seedInput);
+      const seedHdr = mk("div", { display: "flex", justifyContent: "space-between", alignItems: "center" });
+      seedHdr.appendChild(cap("SEED"));
+      seedBox.appendChild(seedHdr);
+
+      // Interactive Control Row: [ - ]  [ Seed Input Display ]  [ 🔀 Shuffle ]  [ + ]
+      const seedCtrlRow = mk("div", {
+        display: "flex",
+        alignItems: "center",
+        gap: "6px",
+        background: C.bg1,
+        border: `1px solid ${C.border}`,
+        borderRadius: "6px",
+        padding: "3px 6px",
+        boxSizing: "border-box",
+      });
+
+      const minusBtn = mk("button", {
+        width: "26px",
+        height: "26px",
+        borderRadius: "4px",
+        background: "transparent",
+        color: C.text,
+        border: "none",
+        fontSize: "14px",
+        fontWeight: "800",
+        cursor: "pointer",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        transition: "all 0.12s ease",
+      }, { textContent: "—" });
+
+      const seedInputEl = mk("input", {
+        type: "number",
+        value: S.seed || 0,
+        flex: "1",
+        width: "60px",
+        background: "transparent",
+        color: C.text,
+        border: "none",
+        fontSize: "12px",
+        fontWeight: "700",
+        outline: "none",
+        textAlign: "center",
+        boxSizing: "border-box",
+      });
+
+      const randomizerBtn = mk("button", {
+        padding: "4px 10px",
+        borderRadius: "14px",
+        background: LIME,
+        color: "#111",
+        border: "none",
+        cursor: "pointer",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        boxShadow: "0 0 8px rgba(0, 255, 102, 0.4)",
+        transition: "all 0.15s ease",
+      });
+      randomizerBtn.appendChild(svgIcon("random", 13, "#111"));
+
+      const plusBtn = mk("button", {
+        width: "26px",
+        height: "26px",
+        borderRadius: "4px",
+        background: "transparent",
+        color: C.text,
+        border: "none",
+        fontSize: "14px",
+        fontWeight: "800",
+        cursor: "pointer",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        transition: "all 0.12s ease",
+      }, { textContent: "+" });
+
+      minusBtn.onmouseover = () => (minusBtn.style.color = LIME);
+      minusBtn.onmouseout = () => (minusBtn.style.color = C.text);
+
+      plusBtn.onmouseover = () => (plusBtn.style.color = LIME);
+      plusBtn.onmouseout = () => (plusBtn.style.color = C.text);
+
+      minusBtn.onclick = () => {
+        let val = parseInt(seedInputEl.value) || 0;
+        val = Math.max(0, val - 1);
+        S.seed = val;
+        seedInputEl.value = val;
+        persist();
+      };
+
+      plusBtn.onclick = () => {
+        let val = parseInt(seedInputEl.value) || 0;
+        val = val + 1;
+        S.seed = val;
+        seedInputEl.value = val;
+        persist();
+      };
+
+      randomizerBtn.onclick = () => {
+        const newSeed = Math.floor(Math.random() * 1000000000);
+        S.seed = newSeed;
+        seedInputEl.value = newSeed;
+        persist();
+      };
+
+      seedInputEl.oninput = () => {
+        S.seed = parseInt(seedInputEl.value) || 0;
+        persist();
+      };
+
+      seedCtrlRow.append(minusBtn, seedInputEl, randomizerBtn, plusBtn);
+      seedBox.appendChild(seedCtrlRow);
       leftCol.appendChild(seedBox);
 
       // Media Input Slot Card (for I2V & R2V modes)
