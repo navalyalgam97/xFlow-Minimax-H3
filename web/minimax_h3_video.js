@@ -247,6 +247,101 @@ const formatBytes = (bytes) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 };
 
+// Web Audio API Waveform Canvas Renderer
+function drawAudioWaveform(canvas, audioBuffer, startTime = 0, endTime = null) {
+  const ctx = canvas.getContext("2d");
+  const width = canvas.width;
+  const height = canvas.height;
+  ctx.clearRect(0, 0, width, height);
+
+  if (!audioBuffer) return;
+
+  const rawData = audioBuffer.getChannelData(0);
+  const totalSamples = rawData.length;
+  const duration = audioBuffer.duration;
+
+  const startSample = Math.floor((startTime / duration) * totalSamples);
+  const endSample = Math.min(totalSamples, Math.floor(((endTime || duration) / duration) * totalSamples));
+
+  const numBars = Math.floor(width / 3);
+  const samplesPerBar = Math.floor(totalSamples / numBars);
+
+  ctx.fillStyle = "#111111";
+  ctx.fillRect(0, 0, width, height);
+
+  for (let i = 0; i < numBars; i++) {
+    const start = i * samplesPerBar;
+    let min = 1.0;
+    let max = -1.0;
+    for (let j = 0; j < samplesPerBar; j++) {
+      const val = rawData[start + j] || 0;
+      if (val < min) min = val;
+      if (val > max) max = val;
+    }
+
+    const barHeight = Math.max(2, (max - min) * (height / 2) * 0.85);
+    const x = i * 3;
+    const y = (height - barHeight) / 2;
+
+    const samplePos = start;
+    const isInCropRegion = samplePos >= startSample && samplePos <= endSample;
+
+    ctx.fillStyle = isInCropRegion ? "#00ff66" : "#444444";
+    ctx.fillRect(x, y, 2, barHeight);
+  }
+}
+
+// Trims AudioBuffer from startTime to endTime and encodes to 16-bit PCM WAV Blob
+async function audioBufferToWavBlob(audioBuffer, startTime, endTime) {
+  const sampleRate = audioBuffer.sampleRate;
+  const numChannels = audioBuffer.numberOfChannels;
+  const startSample = Math.floor(startTime * sampleRate);
+  const endSample = Math.min(audioBuffer.length, Math.floor(endTime * sampleRate));
+  const frameCount = endSample - startSample;
+
+  const offlineCtx = new OfflineAudioContext(numChannels, frameCount, sampleRate);
+  const source = offlineCtx.createBufferSource();
+  source.buffer = audioBuffer;
+  source.connect(offlineCtx.destination);
+  source.start(0, startTime, endTime - startTime);
+
+  const renderedBuffer = await offlineCtx.startRendering();
+
+  const bufferLength = renderedBuffer.length * numChannels * 2 + 44;
+  const outBuffer = new ArrayBuffer(bufferLength);
+  const view = new DataView(outBuffer);
+
+  const writeString = (offset, string) => {
+    for (let i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i));
+  };
+
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + renderedBuffer.length * numChannels * 2, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * numChannels * 2, true);
+  view.setUint16(32, numChannels * 2, true);
+  view.setUint16(34, 16, true);
+  writeString(36, 'data');
+  view.setUint32(40, renderedBuffer.length * numChannels * 2, true);
+
+  let offset = 44;
+  for (let i = 0; i < renderedBuffer.length; i++) {
+    for (let channel = 0; channel < numChannels; channel++) {
+      let sample = renderedBuffer.getChannelData(channel)[i];
+      sample = Math.max(-1, Math.min(1, sample));
+      view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+      offset += 2;
+    }
+  }
+
+  return new Blob([outBuffer], { type: 'audio/wav' });
+}
+
 // Inject CSS strictly scoped to nodes containing .fk-root (Matching Image 2 1:1)
 (() => {
   if (document.getElementById("xflow-one-minimax-style")) return;
@@ -1810,16 +1905,29 @@ app.registerExtension({
         const nameLbl = mk("span", { fontSize: "10px", fontWeight: "700", color: LIME, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
         const audioPlayer = mk("audio", { controls: true, style: "width: 100%; height: 26px; outline: none;" });
 
+        let currentUploadedAudioFile = null;
+
+        const actionGroup = mk("div", { position: "absolute", top: "4px", right: "4px", display: "flex", alignItems: "center", gap: "4px", zIndex: "5" });
+
+        const gearBtn = mk("button", {
+          background: "rgba(10, 10, 10, 0.8)", border: `1px solid ${C.border}`, borderRadius: "4px", color: LIME, cursor: "pointer", padding: "3px 5px", display: "inline-flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)"
+        });
+        const gearIcon = svgIcon("settings", 11, LIME);
+        gearBtn.appendChild(gearIcon);
+
         const clearBtn = mk("button", {
-          position: "absolute", top: "4px", right: "4px", background: "rgba(10, 10, 10, 0.8)", border: `1px solid ${C.border}`, borderRadius: "4px", color: "#ff6666", cursor: "pointer", padding: "3px 5px", display: "inline-flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)", zIndex: "5"
+          background: "rgba(10, 10, 10, 0.8)", border: `1px solid ${C.border}`, borderRadius: "4px", color: "#ff6666", cursor: "pointer", padding: "3px 5px", display: "inline-flex", alignItems: "center", justifyContent: "center", backdropFilter: "blur(4px)"
         });
         clearBtn.appendChild(svgIcon("close", 11, "#ff6666"));
 
-        previewArea.append(clearBtn, nameLbl, audioPlayer);
+        actionGroup.append(gearBtn, clearBtn);
+
+        previewArea.append(actionGroup, nameLbl, audioPlayer);
         box.append(emptyArea, previewArea);
 
         const handleAudioSelect = async (file) => {
           if (!file) return;
+          currentUploadedAudioFile = file;
           const formData = new FormData();
           formData.append("image", file);
           formData.append("overwrite", "true");
@@ -1828,11 +1936,16 @@ app.registerExtension({
             const data = await res.json();
             const serverFileName = data.name || file.name;
             const objectUrl = URL.createObjectURL(file);
-            audioData = { name: serverFileName, url: objectUrl };
+            audioData = { name: serverFileName, url: objectUrl, file: file };
             audioPlayer.src = objectUrl;
             nameLbl.textContent = serverFileName;
             emptyArea.style.display = "none";
             previewArea.style.display = "flex";
+
+            gearBtn.onclick = (e) => {
+              e.stopPropagation();
+              openAudioEditor(currentUploadedAudioFile || file, serverFileName);
+            };
           } catch (e) { console.error("Audio upload failed:", e); }
         };
 
@@ -3020,6 +3133,305 @@ app.registerExtension({
 
       renderLongestSideOverlay();
       root.appendChild(longestSideOverlay);
+
+      // ── AUDIO WAVEFORM & CROP EDITOR OVERLAY ────────────────────────────
+      const audioEditorOverlay = mk("div", {
+        position: "fixed",
+        top: "0",
+        left: "0",
+        width: "100vw",
+        height: "100vh",
+        background: "rgba(0, 0, 0, 0.85)",
+        backdropFilter: "blur(12px)",
+        zIndex: "99999",
+        display: "none",
+        alignItems: "center",
+        justifyContent: "center",
+        boxSizing: "border-box",
+      });
+
+      const audioEditorContainer = mk("div", {
+        width: "660px",
+        background: C.bg0,
+        border: `1px solid ${LIME}`,
+        borderRadius: "12px",
+        boxShadow: "0 20px 50px rgba(0,0,0,0.9), 0 0 30px rgba(0,255,102,0.2)",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        boxSizing: "border-box",
+      });
+
+      const aeHeader = mk("div", {
+        padding: "14px 18px",
+        background: C.bg2,
+        borderBottom: `1px solid ${C.border}`,
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+      });
+
+      const aeTitleGroup = mk("div", { display: "flex", alignItems: "center", gap: "8px" });
+      const aeTitleIcon = svgIcon("music", 16, LIME);
+      const aeTitleText = mk("span", { fontSize: "14px", fontWeight: "900", color: "#fff", letterSpacing: ".05em" }, { textContent: "Audio Waveform & Crop Editor" });
+      aeTitleGroup.append(aeTitleIcon, aeTitleText);
+
+      const aeCloseBtn = mk("button", {
+        padding: "6px 12px",
+        fontSize: "11px",
+        fontWeight: "700",
+        background: "#ff4444",
+        color: "#fff",
+        border: "none",
+        borderRadius: "6px",
+        cursor: "pointer",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "6px",
+        transition: "all 0.15s ease",
+      });
+      aeCloseBtn.append(svgIcon("close", 12, "#fff"), document.createTextNode("Close"));
+
+      aeHeader.append(aeTitleGroup, aeCloseBtn);
+
+      const aeBody = mk("div", {
+        padding: "18px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "14px",
+        boxSizing: "border-box",
+      });
+
+      const aeInfoBar = mk("div", {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        background: C.bg2,
+        padding: "8px 12px",
+        borderRadius: "6px",
+        border: `1px solid ${C.border}`,
+        fontSize: "11px",
+        fontWeight: "700",
+      });
+      const aeFileNameLbl = mk("span", { color: LIME, maxWidth: "320px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+      const aeDurationBadge = mk("span", { color: C.text });
+      aeInfoBar.append(aeFileNameLbl, aeDurationBadge);
+
+      const aeCanvasBox = mk("div", {
+        position: "relative",
+        width: "100%",
+        height: "120px",
+        background: C.bg1,
+        border: `1px solid ${C.border}`,
+        borderRadius: "6px",
+        overflow: "hidden",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      });
+
+      const aeCanvas = mk("canvas", { width: "624", height: "120", style: "width: 100%; height: 100%; display: block;" });
+      aeCanvasBox.appendChild(aeCanvas);
+
+      const aeControlsGrid = mk("div", {
+        display: "grid",
+        gridTemplateColumns: "1fr 1fr",
+        gap: "12px",
+        background: C.bg2,
+        padding: "12px",
+        borderRadius: "6px",
+        border: `1px solid ${C.border}`,
+      });
+
+      const startBox = mk("div", { display: "flex", flexDirection: "column", gap: "4px" });
+      const startHdr = mk("div", { display: "flex", justifyContent: "space-between", fontSize: "10px", fontWeight: "700", color: C.muted });
+      const startValLbl = mk("span", { color: LIME }, { textContent: "0.0s" });
+      startHdr.append(document.createTextNode("START TIME"), startValLbl);
+      const startSlider = mk("input", { type: "range", min: "0", max: "100", step: "0.1", value: "0", style: "width: 100%; cursor: pointer;" });
+      startBox.append(startHdr, startSlider);
+
+      const endBox = mk("div", { display: "flex", flexDirection: "column", gap: "4px" });
+      const endHdr = mk("div", { display: "flex", justifyContent: "space-between", fontSize: "10px", fontWeight: "700", color: C.muted });
+      const endValLbl = mk("span", { color: LIME }, { textContent: "4.0s" });
+      endHdr.append(document.createTextNode("END TIME"), endValLbl);
+      const endSlider = mk("input", { type: "range", min: "0", max: "100", step: "0.1", value: "4", style: "width: 100%; cursor: pointer;" });
+      endBox.append(endHdr, endSlider);
+
+      aeControlsGrid.append(startBox, endBox);
+      aeBody.append(aeInfoBar, aeCanvasBox, aeControlsGrid);
+
+      const aeFooter = mk("div", {
+        padding: "12px 18px",
+        background: C.bg2,
+        borderTop: `1px solid ${C.border}`,
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+      });
+
+      const aeLeftActions = mk("div", { display: "flex", gap: "8px" });
+
+      const aePlayBtn = mk("button", {
+        padding: "8px 14px", fontSize: "12px", fontWeight: "800",
+        background: C.bg1, color: LIME, border: `1px solid ${LIME}`, borderRadius: "6px",
+        cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px"
+      });
+      const aePlayIcon = svgIcon("play", 13, LIME);
+      aePlayBtn.append(aePlayIcon, document.createTextNode("Play Selection"));
+
+      const aeResetBtn = mk("button", {
+        padding: "8px 14px", fontSize: "12px", fontWeight: "700",
+        background: C.bg1, color: C.text, border: `1px solid ${C.border}`, borderRadius: "6px",
+        cursor: "pointer"
+      }, { textContent: "↺ Reset" });
+
+      aeLeftActions.append(aePlayBtn, aeResetBtn);
+
+      const aeApplyBtn = mk("button", {
+        padding: "8px 18px", fontSize: "13px", fontWeight: "900",
+        background: LIME_GRAD, color: "#111", border: "none", borderRadius: "6px",
+        cursor: "pointer", boxShadow: "0 4px 14px rgba(0, 255, 102, 0.3)",
+        display: "inline-flex", alignItems: "center", gap: "6px"
+      });
+      aeApplyBtn.append(svgIcon("check", 14, "#111"), document.createTextNode("Apply Crop"));
+
+      aeFooter.append(aeLeftActions, aeApplyBtn);
+      audioEditorContainer.append(aeHeader, aeBody, aeFooter);
+      audioEditorOverlay.appendChild(audioEditorContainer);
+      root.appendChild(audioEditorOverlay);
+
+      let currentAudioBuffer = null;
+      let currentRawAudioFile = null;
+      let previewAudioCtx = null;
+      let previewSourceNode = null;
+
+      const openAudioEditor = async (file, fileName) => {
+        currentRawAudioFile = file;
+        aeFileNameLbl.textContent = fileName || file.name || "audio_file.wav";
+        openOverlay(audioEditorOverlay);
+
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          currentAudioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+
+          const totalDur = currentAudioBuffer.duration;
+          const targetDur = Math.min(totalDur, parseFloat(S.duration) || 4.0);
+
+          aeDurationBadge.textContent = `Total: ${totalDur.toFixed(1)}s | Target: ${targetDur.toFixed(1)}s`;
+
+          startSlider.max = totalDur.toFixed(1);
+          startSlider.value = "0";
+          endSlider.max = totalDur.toFixed(1);
+          endSlider.value = targetDur.toFixed(1);
+
+          startValLbl.textContent = "0.0s";
+          endValLbl.textContent = `${targetDur.toFixed(1)}s`;
+
+          drawAudioWaveform(aeCanvas, currentAudioBuffer, 0, targetDur);
+
+          const updateWaveformView = () => {
+            let st = parseFloat(startSlider.value);
+            let et = parseFloat(endSlider.value);
+            if (st >= et) {
+              st = Math.max(0, et - 0.5);
+              startSlider.value = st.toFixed(1);
+            }
+            startValLbl.textContent = `${st.toFixed(1)}s`;
+            endValLbl.textContent = `${et.toFixed(1)}s`;
+            drawAudioWaveform(aeCanvas, currentAudioBuffer, st, et);
+          };
+
+          startSlider.oninput = updateWaveformView;
+          endSlider.oninput = updateWaveformView;
+
+          aeResetBtn.onclick = () => {
+            startSlider.value = "0";
+            endSlider.value = Math.min(totalDur, parseFloat(S.duration) || 4.0).toFixed(1);
+            updateWaveformView();
+          };
+
+          let isPlayingSelection = false;
+          aePlayBtn.onclick = () => {
+            if (isPlayingSelection && previewSourceNode) {
+              try { previewSourceNode.stop(); } catch(e){}
+              isPlayingSelection = false;
+              aePlayBtn.style.background = C.bg1;
+              aePlayBtn.style.color = LIME;
+              aePlayIcon.setAttribute("stroke", LIME);
+              aePlayBtn.lastChild.textContent = "Play Selection";
+              return;
+            }
+
+            const st = parseFloat(startSlider.value);
+            const et = parseFloat(endSlider.value);
+            const dur = et - st;
+
+            if (previewAudioCtx) previewAudioCtx.close();
+            previewAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            previewSourceNode = previewAudioCtx.createBufferSource();
+            previewSourceNode.buffer = currentAudioBuffer;
+            previewSourceNode.connect(previewAudioCtx.destination);
+            previewSourceNode.start(0, st, dur);
+
+            isPlayingSelection = true;
+            aePlayBtn.style.background = LIME;
+            aePlayBtn.style.color = "#111";
+            aePlayIcon.setAttribute("stroke", "#111");
+            aePlayBtn.lastChild.textContent = "Stop";
+
+            previewSourceNode.onended = () => {
+              isPlayingSelection = false;
+              aePlayBtn.style.background = C.bg1;
+              aePlayBtn.style.color = LIME;
+              aePlayIcon.setAttribute("stroke", LIME);
+              aePlayBtn.lastChild.textContent = "Play Selection";
+            };
+          };
+
+          aeApplyBtn.onclick = async () => {
+            const st = parseFloat(startSlider.value);
+            const et = parseFloat(endSlider.value);
+
+            aeApplyBtn.disabled = true;
+            aeApplyBtn.lastChild.textContent = "Cropping...";
+
+            try {
+              const croppedBlob = await audioBufferToWavBlob(currentAudioBuffer, st, et);
+              const croppedFile = new File([croppedBlob], `cropped_${fileName || "audio.wav"}`, { type: "audio/wav" });
+
+              const formData = new FormData();
+              formData.append("image", croppedFile);
+              formData.append("overwrite", "true");
+
+              const res = await fetch("/upload/image", { method: "POST", body: formData });
+              const data = await res.json();
+              const serverFileName = data.name || croppedFile.name;
+              const objectUrl = URL.createObjectURL(croppedBlob);
+
+              audioData = { name: serverFileName, url: objectUrl, file: croppedFile };
+              audioPlayer.src = objectUrl;
+              nameLbl.textContent = `${serverFileName} (${(et - st).toFixed(1)}s)`;
+
+              if (previewSourceNode) try { previewSourceNode.stop(); } catch(e){}
+              closeOverlay(audioEditorOverlay);
+            } catch (err) {
+              console.error("Failed to crop audio:", err);
+            } finally {
+              aeApplyBtn.disabled = false;
+              aeApplyBtn.lastChild.textContent = "Apply Crop";
+            }
+          };
+
+        } catch (e) {
+          console.error("Failed to load audio buffer for waveform rendering:", e);
+        }
+      };
+
+      aeCloseBtn.onclick = () => {
+        if (previewSourceNode) try { previewSourceNode.stop(); } catch(e){}
+        closeOverlay(audioEditorOverlay);
+      };
 
       lsGearBtnGroup.onclick = (e) => {
         e.stopPropagation();
