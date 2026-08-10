@@ -495,6 +495,14 @@ app.registerExtension({
         orientation: "Landscape",
         width: 864,
         height: 480,
+        longest_side: 864,
+        step_round: 32,
+        aspect_ratio: "keep",
+        crop_from: "center",
+        upscale_small: true,
+        resample_mode: "auto",
+        active_size_tabs: [864, 1024, 1216, 1344, 1536],
+        active_shape_chips: ["keep", "1:1", "16:9", "9:16", "2:3"],
         duration: 4,
         fps: 24,
         cfg: 1.0,
@@ -893,6 +901,140 @@ app.registerExtension({
       updateCustomSizeMenu(S.orientation || "Landscape");
       orientSizeBox.append(sizeTrigger, sizeMenu);
       leftCol.appendChild(orientSizeBox);
+
+      // ── LONGEST SIDE SELECTOR (for I2V & R2V modes, matching Screenshots 1, 2, 3) ──
+      const longestSideBox = mk("div", {
+        background: C.bg2,
+        padding: "10px",
+        borderRadius: "6px",
+        border: `1px solid ${C.border}`,
+        display: "none",
+        flexDirection: "column",
+        gap: "8px",
+        boxSizing: "border-box",
+      });
+
+      // Top Row: Badge x32 + Gear Icon Button + "864 long side" label
+      const lsTopRow = mk("div", { display: "flex", alignItems: "center", justifyContent: "space-between" });
+      
+      const lsBadge = mk("span", {
+        background: LIME,
+        color: "#111",
+        fontSize: "10px",
+        fontWeight: "900",
+        padding: "2px 6px",
+        borderRadius: "4px",
+        boxShadow: "0 0 6px rgba(0, 255, 102, 0.4)",
+      }, { textContent: `x${S.step_round || 32}` });
+
+      const lsGearBtnGroup = mk("div", { display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" });
+      
+      const lsGearBtn = mk("button", {
+        background: "transparent",
+        border: "none",
+        color: C.text,
+        cursor: "pointer",
+        padding: "2px",
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+      });
+      const gearIconSvg = svgIcon("settings", 13, C.text);
+      lsGearBtn.appendChild(gearIconSvg);
+
+      const lsTitleLbl = mk("span", { fontSize: "11px", fontWeight: "700", color: C.muted, fontStyle: "italic" }, {
+        textContent: `${S.longest_side || 864} long side`
+      });
+
+      lsGearBtnGroup.append(lsGearBtn, lsTitleLbl);
+      lsTopRow.append(lsBadge, lsGearBtnGroup);
+      longestSideBox.appendChild(lsTopRow);
+
+      // Row 1: Longest Side Tabs (864, 1024, 1216, 1344, 1536)
+      const lsTabsRow = mk("div", { display: "flex", gap: "4px", width: "100%", boxSizing: "border-box" });
+      
+      const renderLsTabs = () => {
+        lsTabsRow.innerHTML = "";
+        const tabsList = S.active_size_tabs || [864, 1024, 1216, 1344, 1536];
+        tabsList.forEach(val => {
+          const isSelected = S.longest_side === val;
+          const btn = mk("button", {
+            flex: "1",
+            padding: "5px 0",
+            fontSize: "11px",
+            fontWeight: "800",
+            borderRadius: "4px",
+            border: `1px solid ${isSelected ? LIME : C.border}`,
+            background: isSelected ? LIME : C.bg1,
+            color: isSelected ? "#111" : C.text,
+            cursor: "pointer",
+            outline: "none",
+            transition: "all 0.12s ease",
+            textAlign: "center",
+          }, { textContent: String(val) });
+
+          btn.onmouseover = () => { if (!isSelected) btn.style.borderColor = LIME; };
+          btn.onmouseout = () => { if (!isSelected) btn.style.borderColor = C.border; };
+
+          btn.onclick = () => {
+            S.longest_side = val;
+            lsTitleLbl.textContent = `${val} long side`;
+            persist();
+            renderLsTabs();
+          };
+
+          lsTabsRow.appendChild(btn);
+        });
+      };
+      renderLsTabs();
+      longestSideBox.appendChild(lsTabsRow);
+
+      // Row 2: Aspect Ratio Shape Chips (keep, 1:1, 16:9, 9:16, 2:3)
+      const shapeChipsRow = mk("div", { display: "flex", gap: "4px", width: "100%", boxSizing: "border-box" });
+      
+      const renderShapeChips = () => {
+        shapeChipsRow.innerHTML = "";
+        const chipsList = S.active_shape_chips || ["keep", "1:1", "16:9", "9:16", "2:3"];
+        chipsList.forEach(chip => {
+          const isSelected = S.aspect_ratio === chip;
+          const btn = mk("button", {
+            flex: "1",
+            padding: "5px 0",
+            fontSize: "10px",
+            fontWeight: "700",
+            borderRadius: "4px",
+            border: `1px solid ${isSelected ? LIME : C.border}`,
+            background: isSelected ? LIME : C.bg1,
+            color: isSelected ? "#111" : C.text,
+            cursor: "pointer",
+            outline: "none",
+            transition: "all 0.12s ease",
+            textAlign: "center",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "3px",
+          });
+
+          const chipIcon = mk("span", { display: "inline-block", width: "8px", height: "8px", border: `1px solid ${isSelected ? "#111" : C.text}`, borderRadius: "1px" });
+          btn.append(chipIcon, document.createTextNode(chip));
+
+          btn.onmouseover = () => { if (!isSelected) btn.style.borderColor = LIME; };
+          btn.onmouseout = () => { if (!isSelected) btn.style.borderColor = C.border; };
+
+          btn.onclick = () => {
+            S.aspect_ratio = chip;
+            persist();
+            renderShapeChips();
+          };
+
+          shapeChipsRow.appendChild(btn);
+        });
+      };
+      renderShapeChips();
+      longestSideBox.appendChild(shapeChipsRow);
+
+      leftCol.appendChild(longestSideBox);
 
       // CFG Scale & FPS Row (2 Columns: CFG SCALE on left, FPS on right)
       const cfgFpsRow = mk("div", { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" });
@@ -2160,6 +2302,182 @@ app.registerExtension({
         openOverlay(galleryOverlay);
       };
 
+      // ── LONGEST SIDE SETTINGS MODAL OVERLAY (Screenshots 2 & 3) ──────────────
+      const longestSideOverlay = mk("div", {
+        position: "absolute",
+        top: "0",
+        left: "0",
+        right: "0",
+        bottom: "0",
+        width: "100%",
+        height: "100%",
+        background: C.bg0,
+        zIndex: "105",
+        display: "none",
+        flexDirection: "column",
+        padding: "16px",
+        boxSizing: "border-box",
+        borderRadius: "12px",
+        opacity: "0",
+        transform: "translateY(6px)",
+        transition: "opacity .22s, transform .22s",
+        overflowY: "auto",
+      });
+
+      const lsOverlayHeader = mk("div", { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexShrink: "0" });
+      lsOverlayHeader.appendChild(cap("Longest Side settings"));
+      
+      const closeLsBtn = mk("button", {
+        background: C.bg2,
+        color: C.text,
+        border: `1px solid ${C.border}`,
+        borderRadius: "6px",
+        cursor: "pointer",
+        fontSize: "12px",
+        fontWeight: "800",
+        padding: "4px 10px",
+        transition: "all .12s ease",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "4px"
+      });
+      closeLsBtn.appendChild(svgIcon("close", 12, C.text));
+      closeLsBtn.onclick = () => closeOverlay(longestSideOverlay);
+      lsOverlayHeader.appendChild(closeLsBtn);
+      longestSideOverlay.appendChild(lsOverlayHeader);
+
+      // Section 1: ROUND SIZES TO (Off, 8, 16, 32, 64)
+      const sec1 = mk("div", { display: "flex", flexDirection: "column", gap: "4px", marginBottom: "12px" });
+      sec1.appendChild(cap("ROUND SIZES TO"));
+      const roundGroup = mk("div", { display: "flex", gap: "6px" });
+      [0, 8, 16, 32, 64].forEach(val => {
+        const isSelected = (S.step_round || 32) === val;
+        const btn = mk("button", {
+          flex: "1", padding: "6px 0", fontSize: "11px", fontWeight: "800",
+          borderRadius: "4px", border: `1px solid ${isSelected ? LIME : C.border}`,
+          background: isSelected ? LIME : C.bg2, color: isSelected ? "#111" : C.text,
+          cursor: "pointer", outline: "none", transition: "all 0.12s ease"
+        }, { textContent: val === 0 ? "Off" : String(val) });
+        btn.onclick = () => {
+          S.step_round = val;
+          lsBadge.textContent = val === 0 ? "Off" : `x${val}`;
+          persist();
+          closeOverlay(longestSideOverlay);
+          renderLsTabs();
+        };
+        roundGroup.appendChild(btn);
+      });
+      sec1.appendChild(roundGroup);
+      sec1.appendChild(mk("div", { fontSize: "10px", color: C.muted, marginTop: "2px" }, {
+        textContent: "Most models want sizes in steps like these. This node only, and the small button on the node does the same thing."
+      }));
+      longestSideOverlay.appendChild(sec1);
+
+      // Section 2: SIZE TABS (864, 1024, 1216, 1344, 1536)
+      const sec2 = mk("div", { display: "flex", flexDirection: "column", gap: "4px", marginBottom: "12px" });
+      const sec2Hdr = mk("div", { display: "flex", justifyContent: "space-between", alignItems: "center" });
+      sec2Hdr.appendChild(cap("SIZE TABS"));
+      const resetSizesBtn = mk("button", { background: "transparent", border: "none", color: C.muted, fontSize: "10px", cursor: "pointer" }, { textContent: "reset" });
+      resetSizesBtn.onclick = () => {
+        S.active_size_tabs = [864, 1024, 1216, 1344, 1536];
+        persist();
+        renderLsTabs();
+      };
+      sec2Hdr.appendChild(resetSizesBtn);
+      sec2.appendChild(sec2Hdr);
+
+      const sizeTabsGrid = mk("div", { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px" });
+      [864, 1024, 1216, 1344, 1536].forEach(sizeVal => {
+        const isSelected = S.longest_side === sizeVal;
+        const btn = mk("button", {
+          padding: "8px", fontSize: "12px", fontWeight: "800", borderRadius: "6px",
+          border: `1px solid ${isSelected ? LIME : C.border}`, background: isSelected ? LIME : C.bg2,
+          color: isSelected ? "#111" : C.text, cursor: "pointer", transition: "all 0.12s ease"
+        }, { textContent: String(sizeVal) });
+        btn.onclick = () => {
+          S.longest_side = sizeVal;
+          lsTitleLbl.textContent = `${sizeVal} long side`;
+          persist();
+          renderLsTabs();
+          closeOverlay(longestSideOverlay);
+        };
+        sizeTabsGrid.appendChild(btn);
+      });
+      sec2.appendChild(sizeTabsGrid);
+      sec2.appendChild(mk("div", { fontSize: "10px", color: C.muted, marginTop: "2px" }, {
+        textContent: "Type any size. Up to 5 fit on the row, and each is rounded to the nearest 32 to match the step above."
+      }));
+      longestSideOverlay.appendChild(sec2);
+
+      // Section 3: SHAPE CHIPS (Aspect Ratios)
+      const sec3 = mk("div", { display: "flex", flexDirection: "column", gap: "4px", marginBottom: "12px" });
+      sec3.appendChild(cap("SHAPE CHIPS"));
+      const shapeGrid = mk("div", { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "6px" });
+      ["keep", "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "5:4", "4:5", "21:9", "9:21", "2:1", "1:2"].forEach(chip => {
+        const isSelected = S.aspect_ratio === chip;
+        const btn = mk("button", {
+          padding: "6px 2px", fontSize: "10px", fontWeight: "700", borderRadius: "4px",
+          border: `1px solid ${isSelected ? LIME : C.border}`, background: isSelected ? LIME : C.bg2,
+          color: isSelected ? "#111" : C.text, cursor: "pointer", textAlign: "center"
+        }, { textContent: chip });
+        btn.onclick = () => {
+          S.aspect_ratio = chip;
+          persist();
+          renderShapeChips();
+          closeOverlay(longestSideOverlay);
+        };
+        shapeGrid.appendChild(btn);
+      });
+      sec3.appendChild(shapeGrid);
+      longestSideOverlay.appendChild(sec3);
+
+      // Section 4: CROP FROM (3x3 Grid)
+      const sec4 = mk("div", { display: "flex", flexDirection: "column", gap: "4px", marginBottom: "12px" });
+      sec4.appendChild(cap("CROP FROM"));
+      const cropRow = mk("div", { display: "flex", gap: "12px", alignItems: "center" });
+      const cropGrid = mk("div", { display: "grid", gridTemplateColumns: "repeat(3, 20px)", gap: "2px", background: "#111", padding: "2px", borderRadius: "4px", border: `1px solid ${C.border}` });
+      const alignments = ["top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right"];
+      alignments.forEach(align => {
+        const isSelected = (S.crop_from || "center") === align;
+        const cell = mk("div", {
+          width: "20px", height: "20px", background: isSelected ? LIME : "#222",
+          borderRadius: "2px", cursor: "pointer"
+        });
+        cell.onclick = () => {
+          S.crop_from = align;
+          persist();
+          closeOverlay(longestSideOverlay);
+        };
+        cropGrid.appendChild(cell);
+      });
+      cropRow.append(cropGrid, mk("div", { fontSize: "10px", color: C.muted }, { textContent: "Which part of the picture to keep when a shape crops it." }));
+      sec4.appendChild(cropRow);
+      longestSideOverlay.appendChild(sec4);
+
+      // Section 5: RESAMPLE (auto, lanczos, bicubic, bilinear, nearest)
+      const sec5 = mk("div", { display: "flex", flexDirection: "column", gap: "4px", marginBottom: "12px" });
+      sec5.appendChild(cap("RESAMPLE"));
+      const resampleGroup = mk("div", { display: "flex", gap: "4px" });
+      ["auto", "lanczos", "bicubic", "bilinear", "nearest"].forEach(resMode => {
+        const isSelected = (S.resample_mode || "auto") === resMode;
+        const btn = mk("button", {
+          flex: "1", padding: "5px 0", fontSize: "10px", fontWeight: "700", borderRadius: "4px",
+          border: `1px solid ${isSelected ? LIME : C.border}`, background: isSelected ? LIME : C.bg2,
+          color: isSelected ? "#111" : C.text, cursor: "pointer"
+        }, { textContent: resMode });
+        btn.onclick = () => {
+          S.resample_mode = resMode;
+          persist();
+          closeOverlay(longestSideOverlay);
+        };
+        resampleGroup.appendChild(btn);
+      });
+      sec5.appendChild(resampleGroup);
+      longestSideOverlay.appendChild(sec5);
+
+      root.appendChild(longestSideOverlay);
+      lsGearBtnGroup.onclick = () => openOverlay(longestSideOverlay);
+
       // Mode Switcher logic with Vector Icon state updates
       function setMode(m) {
         S.mode = m;
@@ -2176,8 +2494,12 @@ app.registerExtension({
         });
 
         if (m === "T2V") {
+          orientSizeBox.style.display = "flex";
+          longestSideBox.style.display = "none";
           slotCard.style.display = "none";
         } else {
+          orientSizeBox.style.display = "none";
+          longestSideBox.style.display = "flex";
           slotCard.style.display = "flex";
         }
 
