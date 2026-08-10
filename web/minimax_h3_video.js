@@ -1689,15 +1689,7 @@ app.registerExtension({
         negToggleBtn.style.color = negOpen ? LIME : C.muted;
       };
 
-      // Footer Row (Matching Image 2 1:1)
-      const footerRow = mk("div", {
-        display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "2px", flexShrink: "0", width: "100%", boxSizing: "border-box"
-      });
-      const footerLeft = mk("div", { fontSize: "10px", color: C.dim, fontWeight: "600", letterSpacing: ".05em" }, { textContent: "xFlowOne" });
-      const footerRight = mk("div", { fontSize: "10px", color: C.dim, fontWeight: "600", letterSpacing: ".05em" }, { textContent: "created by NAVAL" });
-      footerRow.append(footerLeft, footerRight);
-
-      promptSection.append(promptHdr, loraDrawer, promptTA, negCollapse, footerRow);
+      promptSection.append(promptHdr, loraDrawer, promptTA, negCollapse);
       pad.appendChild(promptSection);
       root.appendChild(pad);
 
