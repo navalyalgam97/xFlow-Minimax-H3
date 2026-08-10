@@ -3,7 +3,7 @@
 <div align="center">
 
 ![xFlowOne Banner](https://img.shields.io/badge/xFlowOne-Minimax_H3-00ff66?style=for-the-badge&logo=comfyui&logoColor=black)
-![Version](https://img.shields.io/badge/version-1.1.0-00ff66?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.3.0-00ff66?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
 
 *A single-node, 1:1 `xFlowOne` design system UI for Minimax H3 Video Generation in ComfyUI V2.*
@@ -16,14 +16,17 @@
 
 - 🟢 **1:1 xFlowOne UI Architecture**: Full-bleed dark mode UI with `#00ff66` neon lime accents, scoped `.fk-root` styling, and 0px-padding edge-to-edge canvas integration matching Image 2 (`xFlowOne · LTX-2.3`).
 - 🎬 **3 Operational Generation Modes**:
-  - **T2V (Text to Video)**: Generate high-fidelity videos directly from text prompts.
-  - **I2V (Image to Video)**: Animate static images with motion controls.
+  - **T2V (Text to Video)**: Generate high-fidelity videos directly from text prompts with Orientation & Size custom dropdowns.
+  - **I2V (Image to Video)**: Animate static images with Longest Side selector & Gear Icon Settings Drawer popup.
   - **R2V (Ref + Audio)**: Sync reference images with audio input files.
-- ⚙️ **Models & Setup Manager Overlay**:
-  - Real-time status for all 5 required safetensors (`fl2va`, `ref2va`, `qwen3vl_clip`, `video_vae`, `audio_vae`).
-  - Automatic download directly from HuggingFace to designated ComfyUI model directories.
-  - Progress bar tracking, pause/resume, and model deletion options.
-  - Sleek bright red (`#ff4444`) close button and 100% box containment.
+- ⚙️ **Longest Side Selector & Gear Settings Drawer (I2V / R2V modes)**:
+  - Interactive size tabs, aspect ratio shape chips, 3x3 crop alignment matrix, step rounding (`Off`, `8`, `16`, `32`, `64`), and resample mode controls.
+- ⚡ **Visual Interactive Duration Slider (1s - 10s)**:
+  - Neon green gradient fill bar with glowing handle thumb, default `4s`, and live frame calculation (`4s → 96 frames`).
+- 🎲 **Interactive SEED Control Row**:
+  - `[ — ] [ Seed Input ] [ 🔀 Shuffle ] [ + ]` with neon green shuffle button.
+- 🎛 **CFG Scale Defaulted to 1.0**:
+  - Matched font family & weight 1:1 with all UI controls.
 - 🎨 **Add LoRA Models Manager**:
   - Interactive multi-slot LoRA stacker directly in the prompt area.
   - Real-time scan of local `ComfyUI/models/loras/` safetensors.
@@ -51,7 +54,20 @@ All required models can be managed and downloaded automatically via the built-in
 
 ## 📜 Changelog
 
-### Version 1.1.0 (Latest Release)
+### Version 1.3.0 (Latest Release)
+
+- 🎨 **Orientation & Size Custom Dropdowns**: Clean white resolution numbers with xFlow neon green hover glow.
+- 🎞 **Custom FPS Dropdown**: xFlow styled 24 FPS / 30 FPS selection menu.
+- ⚡ **Visual Duration Slider**: 1-10s range slider in neon green with live frame calculation.
+- 🎲 **Interactive Seed Controls**: Minus, neon green shuffle button, and plus controls.
+- ⚙️ **Longest Side Selector & Gear Drawer**: Full interactive settings overlay for I2V/R2V modes (Round sizes, Size tabs, Shape chips, 3x3 Crop matrix, Resample modes).
+- 🎛 **CFG Scale 1.0 Default**: Matched typography and default value.
+- 🎨 **1:1 xFlowOne UI Design**: Scoped `.fk-root` dark mode canvas integration with neon lime accents (`#00ff66`) matching `xFlowOne · LTX-2.3`.
+- ⚙️ **Models & Setup Manager**: Added overlay downloader with direct HuggingFace model downloading, live progress bars, pause/resume, deletion, red close button (`#ff4444`), and 100% box containment.
+- 🎨 **Add LoRA Stacker**: Added interactive multi-slot LoRA manager directly in prompt header with strength controls.
+- 📐 **Vector SVG Icons**: Replaced generic OS emojis with custom vector SVG icons across all tabs, mode pills, action buttons, and setup controls.
+
+### Version 1.1.0
 
 - 🎨 **1:1 xFlowOne UI Design**: Scoped `.fk-root` dark mode canvas integration with neon lime accents (`#00ff66`) matching `xFlowOne · LTX-2.3`.
 - ⚙️ **Models & Setup Manager**: Added overlay downloader with direct HuggingFace model downloading, live progress bars, pause/resume, deletion, red close button (`#ff4444`), and 100% box containment.

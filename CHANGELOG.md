@@ -2,6 +2,36 @@
 
 All notable changes to the **xFlowOne · Minimax H3** single-node video interface for ComfyUI.
 
+## [1.3.0] - 2026-08-10
+
+### 🚀 Major Features & UI Enhancements
+- **🎨 Orientation & Size Custom Dropdown System**:
+  - Custom floating xFlow menu popups with clean uniform white numbers (`#dedede`) and zero stars.
+  - On hover, borders light up in **xFlow Neon Green (`#00ff66`)** with subtle glow.
+- **🎞 Custom FPS Selector**:
+  - Replaced native browser `<select>` with custom xFlow floating menu (`24 FPS`, `30 FPS`) featuring neon green hover highlights.
+- **⚡ Visual Interactive Duration Slider (1s - 10s)**:
+  - Replaced manual number input with custom visual drag slider bar featuring **xFlow Neon Green Gradient Fill (`#00ff66`)** and glowing handle thumb.
+  - Default duration set to **`4s`** (`4s → 96 frames` live frame calculation display).
+- **🎲 SEED Control System**:
+  - Added interactive seed row: **`[ — ] [ Seed Value Input ] [ 🔀 Shuffle ] [ + ]`**.
+  - Bright **xFlow Neon Green (`#00ff66`)** shuffle button that generates a fresh random integer seed instantly on click.
+- **🎛 CFG Scale & Layout Optimization**:
+  - CFG Scale defaulted strictly to **`1.0`** with font family, font weight (`700`), and line height matching all controls 1:1.
+  - Swapped layout: **CFG SCALE** (half width) next to **FPS** on top, followed by full-width **DURATION** slider bar above **SEED**.
+- **⚙️ Longest Side Selector & Gear Settings Drawer (I2V / R2V modes)**:
+  - Added **Longest Side Selector** featuring `x32` step badge, **Gear Icon (`⚙`)**, size tabs (`864`, `1024`, `1216`, `1344`, `1536`), and aspect ratio shape chips (`keep`, `1:1`, `16:9`, `9:16`, `2:3`).
+  - Clicking **Gear Icon (`⚙`)** opens a dynamic, reactive **Longest Side Settings Modal Drawer** in xFlow neon green styling:
+    - **ROUND SIZES TO**: `Off`, `8`, `16`, `32`, `64`.
+    - **SIZE TABS**: Grid selection for active size tabs + reset button.
+    - **SHAPE CHIPS**: Aspect ratio chips (`keep`, `1:1`, `16:9`, `9:16`, `4:3`, `3:4`, `3:2`, `2:3`, `5:4`, `4:5`, `21:9`, `9:21`, `2:1`, `1:2`).
+    - **CROP FROM**: Interactive **3x3 alignment matrix grid** (active cell highlighted in neon green `#00ff66`).
+    - **RESAMPLE**: Algorithm selector (`auto`, `lanczos`, `bicubic`, `bilinear`, `nearest`).
+  - Every option is 100% interactive, dynamically re-rendering live with event propagation isolation.
+- **✨ Uncluttered Minimal UI**:
+  - Removed `xFlowOne` and `created by NAVAL` footer text from the prompt section.
+  - Removed unused `MOTION STRENGTH` input box.
+
 ---
 
 ## [1.1.0] - 2026-08-10
