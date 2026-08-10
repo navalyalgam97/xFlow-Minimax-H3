@@ -508,7 +508,11 @@ app.registerExtension({
 
       try {
         const saved = localStorage.getItem(LS_KEY);
-        if (saved) Object.assign(S, JSON.parse(saved));
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.cfg === 7.5 || !parsed.cfg) parsed.cfg = 1.0;
+          Object.assign(S, parsed);
+        }
       } catch (e) {}
 
       const persist = () => {
@@ -896,7 +900,24 @@ app.registerExtension({
       // CFG Scale Box (Half width, Default 1.0)
       const cfgBox = mk("div", { background: C.bg2, padding: "8px 10px", borderRadius: "6px", border: `1px solid ${C.border}` });
       cfgBox.appendChild(cap("CFG SCALE"));
-      const cfgInput = mk("input", { type: "number", min: "1.0", max: "20.0", step: "0.5", value: S.cfg || 1.0, width: "100%", background: C.bg1, color: C.text, border: `1px solid ${C.border}`, borderRadius: "4px", padding: "4px 8px", fontSize: "11px", outline: "none", boxSizing: "border-box" });
+      const cfgInput = mk("input", {
+        type: "number",
+        min: "1.0",
+        max: "20.0",
+        step: "0.5",
+        value: S.cfg != null ? S.cfg : 1.0,
+        width: "100%",
+        background: C.bg1,
+        color: C.text,
+        border: `1px solid ${C.border}`,
+        borderRadius: "4px",
+        padding: "6px 8px",
+        fontSize: "11px",
+        fontWeight: "700",
+        fontFamily: "inherit",
+        outline: "none",
+        boxSizing: "border-box",
+      });
       cfgInput.oninput = () => { S.cfg = parseFloat(cfgInput.value) || 1.0; persist(); };
       cfgBox.appendChild(cfgInput);
       cfgFpsRow.appendChild(cfgBox);
