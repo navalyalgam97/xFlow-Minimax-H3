@@ -1101,10 +1101,22 @@ app.registerExtension({
       let isHelpDrawerOpen = false;
       const toggleHelpDrawer = () => {
         isHelpDrawerOpen = !isHelpDrawerOpen;
-        helpInlineDrawer.style.display = isHelpDrawerOpen ? "flex" : "none";
-        mainRow.style.display = isHelpDrawerOpen ? "none" : "flex";
-        helpBtn.style.borderColor = isHelpDrawerOpen ? LIME : C.border;
-        helpBtn.style.color = isHelpDrawerOpen ? LIME : C.text;
+        if (isHelpDrawerOpen) {
+          if (settingsOverlay.style.display === "flex") {
+            closeOverlay(settingsOverlay);
+            modelsBtn.style.borderColor = C.border;
+            modelsBtn.style.color = C.text;
+          }
+          helpInlineDrawer.style.display = "flex";
+          mainRow.style.display = "none";
+          helpBtn.style.borderColor = LIME;
+          helpBtn.style.color = LIME;
+        } else {
+          helpInlineDrawer.style.display = "none";
+          mainRow.style.display = "flex";
+          helpBtn.style.borderColor = C.border;
+          helpBtn.style.color = C.text;
+        }
       };
 
       helpBtn.onclick = (e) => {
@@ -2770,36 +2782,33 @@ app.registerExtension({
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
+        paddingBottom: "10px",
         marginBottom: "12px",
-        flexShrink: "0",
+        borderBottom: `1px solid ${C.border}`,
         width: "100%",
         boxSizing: "border-box",
       });
-      setHeader.appendChild(cap("MINIMAX H3 REQUIRED MODEL SAFETENSORS & SETUP MANAGER"));
 
-      // SLEEK MINIMAL BRIGHT RED CLOSE BUTTON with Vector SVG Cross
+      const setNavTitleGroup = mk("div", { display: "flex", alignItems: "center", gap: "8px" });
+      const setNavIcon = svgIcon("settings", 18, LIME);
+      const setNavText = mk("span", { fontSize: "15px", fontWeight: "900", color: "#fff", letterSpacing: ".04em" }, { textContent: "xFlow Minimax H3 - Models & Setup Manager" });
+      setNavTitleGroup.append(setNavIcon, setNavText);
+
       const closeSetBtn = mk("button", {
-        background: "#ff4444",
-        color: "#ffffff",
-        border: "none",
-        borderRadius: "6px",
-        cursor: "pointer",
-        fontSize: "12px",
-        fontWeight: "800",
-        padding: "6px 16px",
-        boxShadow: "0 2px 10px rgba(255, 68, 68, 0.4)",
-        transition: "all .15s ease",
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "6px",
+        padding: "6px 14px", fontSize: "11px", fontWeight: "700", background: "#ff4444", color: "#fff",
+        border: "none", borderRadius: "6px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px"
       });
-      closeSetBtn.appendChild(svgIcon("close", 12, "#fff"));
-      closeSetBtn.appendChild(document.createTextNode("Close"));
+      closeSetBtn.append(svgIcon("close", 12, "#fff"), document.createTextNode("Close"));
 
       closeSetBtn.onmouseover = () => (closeSetBtn.style.background = "#ff6666");
       closeSetBtn.onmouseout = () => (closeSetBtn.style.background = "#ff4444");
-      closeSetBtn.onclick = () => closeOverlay(settingsOverlay);
-      setHeader.appendChild(closeSetBtn);
+      closeSetBtn.onclick = (e) => {
+        e.stopPropagation();
+        closeOverlay(settingsOverlay);
+        modelsBtn.style.borderColor = C.border;
+        modelsBtn.style.color = C.text;
+      };
+      setHeader.append(setNavTitleGroup, closeSetBtn);
       settingsOverlay.appendChild(setHeader);
 
       const modelsGrid = mk("div", {
@@ -2816,7 +2825,21 @@ app.registerExtension({
       settingsOverlay.appendChild(modelsGrid);
       root.appendChild(settingsOverlay);
 
-      modelsBtn.onclick = () => { fetchAndRenderModels(); openOverlay(settingsOverlay); };
+      modelsBtn.onclick = (e) => {
+        e.stopPropagation();
+        const isOpen = settingsOverlay.style.display === "flex";
+        if (isOpen) {
+          closeOverlay(settingsOverlay);
+          modelsBtn.style.borderColor = C.border;
+          modelsBtn.style.color = C.text;
+        } else {
+          if (isHelpDrawerOpen) toggleHelpDrawer();
+          fetchAndRenderModels();
+          openOverlay(settingsOverlay);
+          modelsBtn.style.borderColor = LIME;
+          modelsBtn.style.color = LIME;
+        }
+      };
 
       let pollInterval = null;
       const startPollingModels = () => {
@@ -2828,6 +2851,59 @@ app.registerExtension({
       const renderModelCards = (list) => {
         modelsGrid.innerHTML = "";
         let anyDl = false;
+
+        // Bulk Download All Missing Weights Button Banner
+        const missingCount = list.filter(m => !m.installed).length;
+        const bulkBanner = mk("div", {
+          background: C.bg2,
+          border: `1px solid ${LIME}`,
+          borderRadius: "8px",
+          padding: "12px 16px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "6px",
+          width: "100%",
+          boxSizing: "border-box",
+        });
+
+        const bulkLeft = mk("div", { display: "flex", flexDirection: "column", gap: "2px" });
+        bulkLeft.appendChild(mk("div", { fontSize: "12px", fontWeight: "800", color: LIME, letterSpacing: ".04em" }, { textContent: "📦 REQUIRED MINIMAX H3 MODEL SAFETENSORS" }));
+        bulkLeft.appendChild(mk("div", { fontSize: "11px", color: C.muted }, { textContent: missingCount > 0 ? `${missingCount} missing model weight(s) required for video generation.` : "All required model weights are installed and ready!" }));
+
+        bulkBanner.appendChild(bulkLeft);
+
+        if (missingCount > 0) {
+          const bulkBtn = mk("button", {
+            padding: "6px 14px",
+            fontSize: "11px",
+            fontWeight: "800",
+            background: LIME,
+            color: "#111",
+            border: "none",
+            borderRadius: "6px",
+            cursor: "pointer",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            boxShadow: "0 2px 10px rgba(0, 255, 102, 0.35)",
+          });
+          bulkBtn.append(svgIcon("download", 13, "#111"), document.createTextNode(`Download All (${missingCount})`));
+          bulkBtn.onclick = async (e) => {
+            e.stopPropagation();
+            for (const m of list) {
+              if (!m.installed && m.status !== "downloading") {
+                try {
+                  await fetch(`/minimax_h3/download_model?id=${m.id}`, { method: "POST" });
+                } catch(e) {}
+              }
+            }
+            startPollingModels();
+          };
+          bulkBanner.appendChild(bulkBtn);
+        }
+
+        modelsGrid.appendChild(bulkBanner);
 
         list.forEach(m => {
           if (m.status === "downloading") anyDl = true;
