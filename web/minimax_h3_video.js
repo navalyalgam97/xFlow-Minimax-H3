@@ -4,6 +4,7 @@
  * Production widget matching `xFlowOne · LTX-2.3` / `one_node_ltx23.js` 1:1.
  * Features full ComfyUI V2 CSS scoping (.fk-root), 0px top padding,
  * mode pills (T2V, I2V, R2V), video player preview, status progress bar,
+ * Pixaroma Orientation & Size Selector (Portrait/Landscape dropdown list),
  * prompt editor with Director drawer, Add LoRA manager drawer, gallery overlay,
  * and sleek Models & Setup Manager overlay with custom vector SVG icons across all tabs and modes.
  *
@@ -28,10 +29,11 @@ const C = {
   dim: "#2e2e2e",
   warn: "#ffb347",
   err: "#ff4444",
+  accentOrange: "#ff6744"
 };
 
 const NODE_W = 980;
-const NODE_H = 740;
+const NODE_H = 760;
 
 const LS_KEY = "xflow_one_minimax_h3_state";
 const DEFAULT_NEG_PROMPT = "low quality, deformed, blurry, watermark, ugly, bad anatomy, disfigured, mutated, extra limbs, poorly drawn face, bad proportions";
@@ -40,6 +42,41 @@ const MODES = {
   T2V: "Text to Video",
   I2V: "Image to Video",
   R2V: "Reference + Audio",
+};
+
+const RESOLUTIONS = {
+  Portrait: [
+    { label: "352 × 608", w: 352, h: 608 },
+    { label: "416 × 736", w: 416, h: 736 },
+    { label: "480 × 864 ★", w: 480, h: 864, rec: true },
+    { label: "544 × 960", w: 544, h: 960 },
+    { label: "608 × 1056", w: 608, h: 1056 },
+    { label: "640 × 1152", w: 640, h: 1152 },
+    { label: "672 × 1216 ★", w: 672, h: 1216, rec: true },
+    { label: "736 × 1280", w: 736, h: 1280 },
+    { label: "768 × 1344 ★", w: 768, h: 1344, rec: true },
+    { label: "768 × 1376", w: 768, h: 1376 },
+    { label: "832 × 1504", w: 832, h: 1504 },
+    { label: "928 × 1664", w: 928, h: 1664 },
+    { label: "1024 × 1824", w: 1024, h: 1824 },
+    { label: "1088 × 1920", w: 1088, h: 1920 },
+  ],
+  Landscape: [
+    { label: "608 × 352", w: 608, h: 352 },
+    { label: "736 × 416", w: 736, h: 416 },
+    { label: "864 × 480 ★", w: 864, h: 480, rec: true },
+    { label: "960 × 544", w: 960, h: 544 },
+    { label: "1056 × 608", w: 1056, h: 608 },
+    { label: "1152 × 640", w: 1152, h: 640 },
+    { label: "1216 × 672 ★", w: 1216, h: 672, rec: true },
+    { label: "1280 × 736", w: 1280, h: 736 },
+    { label: "1344 × 768 ★", w: 1344, h: 768, rec: true },
+    { label: "1376 × 768", w: 1376, h: 768 },
+    { label: "1504 × 832", w: 1504, h: 832 },
+    { label: "1664 × 928", w: 1664, h: 928 },
+    { label: "1824 × 1024", w: 1824, h: 1024 },
+    { label: "1920 × 1088", w: 1920, h: 1088 },
+  ]
 };
 
 const FALLBACK_MODELS = [
@@ -330,6 +367,9 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
         inputs["unet_name"] = node.widgets_values[0] || (mode === "R2V" ? "h3/minimax_h3_ref2va_pruned_int8_convrot.safetensors" : "h3/minimax_h3_fl2va_pruned_int8_convrot.safetensors");
       } else if (classType === "PixaromaPrompt") {
         inputs["text"] = params.prompt;
+      } else if (classType === "PixaromaSizes") {
+        inputs["width"] = parseInt(params.width || 864);
+        inputs["height"] = parseInt(params.height || 480);
       } else if (classType === "PixaromaDuration") {
         inputs["duration"] = parseInt(params.duration);
       } else if (classType === "PixaromaSaveMp4") {
@@ -345,6 +385,8 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
       } else if (classType === "MiniMaxH3ImageToVideo" || classType === "MiniMaxH3ReferenceToVideo") {
         inputs["prompt"] = params.prompt;
         inputs["motion_strength"] = parseFloat(params.motion_strength);
+        if (params.width) inputs["width"] = parseInt(params.width);
+        if (params.height) inputs["height"] = parseInt(params.height);
       }
     }
 
@@ -412,6 +454,9 @@ app.registerExtension({
       // State persistence
       let S = {
         mode: "T2V",
+        orientation: "Landscape",
+        width: 864,
+        height: 480,
         duration: 4,
         fps: 24,
         motion_strength: 0.5,
@@ -571,6 +616,133 @@ app.registerExtension({
         flexShrink: "0",
         boxSizing: "border-box",
       });
+
+      // ── ORIENTATION & SIZE SELECTOR (Matching Pixaroma 1:1) ─────────────────
+      const orientSizeBox = mk("div", {
+        background: C.bg2,
+        padding: "10px",
+        borderRadius: "6px",
+        border: `1px solid ${C.border}`,
+        display: "flex",
+        flexDirection: "column",
+        gap: "8px",
+        boxSizing: "border-box",
+      });
+
+      const orientHdr = mk("div", { display: "flex", justifyContent: "space-between", alignItems: "center" });
+      orientHdr.appendChild(cap("ORIENTATION & SIZE"));
+
+      // Orientation Pills: Portrait | Landscape
+      const orientPillGroup = mk("div", { display: "flex", gap: "6px" });
+
+      const portraitBtn = mk("button", {
+        padding: "4px 10px",
+        fontSize: "11px",
+        fontWeight: "700",
+        borderRadius: "6px",
+        border: `1px solid ${S.orientation === "Portrait" ? C.accentOrange : C.border}`,
+        background: S.orientation === "Portrait" ? C.accentOrange : C.bg1,
+        color: S.orientation === "Portrait" ? "#fff" : C.text,
+        cursor: "pointer",
+        flex: "1",
+        outline: "none",
+        transition: "all 0.15s ease",
+      }, { textContent: "Portrait" });
+
+      const landscapeBtn = mk("button", {
+        padding: "4px 10px",
+        fontSize: "11px",
+        fontWeight: "700",
+        borderRadius: "6px",
+        border: `1px solid ${S.orientation === "Landscape" ? C.accentOrange : C.border}`,
+        background: S.orientation === "Landscape" ? C.accentOrange : C.bg1,
+        color: S.orientation === "Landscape" ? "#fff" : C.text,
+        cursor: "pointer",
+        flex: "1",
+        outline: "none",
+        transition: "all 0.15s ease",
+      }, { textContent: "Landscape" });
+
+      orientPillGroup.append(portraitBtn, landscapeBtn);
+      orientHdr.appendChild(orientPillGroup);
+      orientSizeBox.appendChild(orientHdr);
+
+      // Size Dropdown (<select>)
+      const sizeSelect = mk("select", {
+        width: "100%",
+        background: C.bg1,
+        color: C.text,
+        border: `1px solid ${C.border}`,
+        borderRadius: "6px",
+        padding: "6px 10px",
+        fontSize: "12px",
+        fontWeight: "700",
+        outline: "none",
+        cursor: "pointer",
+        textAlign: "center",
+        boxSizing: "border-box",
+      });
+
+      const updateSizeDropdownOptions = (orient) => {
+        sizeSelect.innerHTML = "";
+        const list = RESOLUTIONS[orient] || RESOLUTIONS.Landscape;
+
+        list.forEach(resItem => {
+          const opt = mk("option", {
+            value: `${resItem.w}x${resItem.h}`,
+            textContent: resItem.label,
+          });
+          if (resItem.w === S.width && resItem.h === S.height) {
+            opt.selected = true;
+          }
+          sizeSelect.appendChild(opt);
+        });
+      };
+
+      portraitBtn.onclick = () => {
+        S.orientation = "Portrait";
+        portraitBtn.style.background = C.accentOrange;
+        portraitBtn.style.borderColor = C.accentOrange;
+        portraitBtn.style.color = "#fff";
+
+        landscapeBtn.style.background = C.bg1;
+        landscapeBtn.style.borderColor = C.border;
+        landscapeBtn.style.color = C.text;
+
+        S.width = 480;
+        S.height = 864;
+        updateSizeDropdownOptions("Portrait");
+        persist();
+      };
+
+      landscapeBtn.onclick = () => {
+        S.orientation = "Landscape";
+        landscapeBtn.style.background = C.accentOrange;
+        landscapeBtn.style.borderColor = C.accentOrange;
+        landscapeBtn.style.color = "#fff";
+
+        portraitBtn.style.background = C.bg1;
+        portraitBtn.style.borderColor = C.border;
+        portraitBtn.style.color = C.text;
+
+        S.width = 864;
+        S.height = 480;
+        updateSizeDropdownOptions("Landscape");
+        persist();
+      };
+
+      sizeSelect.onchange = () => {
+        const parts = sizeSelect.value.split("x");
+        if (parts.length === 2) {
+          S.width = parseInt(parts[0]);
+          S.height = parseInt(parts[1]);
+          persist();
+        }
+      };
+
+      updateSizeDropdownOptions(S.orientation || "Landscape");
+      orientSizeBox.appendChild(sizeSelect);
+      leftCol.appendChild(orientSizeBox);
 
       // Duration & FPS Row
       const durFpsRow = mk("div", { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" });
@@ -1533,6 +1705,8 @@ app.registerExtension({
             cfg: S.cfg,
             seed: S.seed,
             loras: S.loras,
+            width: S.width,
+            height: S.height,
           }, statusLabel, progressBarInner);
         } catch (err) {
           genBtn.disabled = false;
