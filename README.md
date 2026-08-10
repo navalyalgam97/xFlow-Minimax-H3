@@ -37,7 +37,7 @@
 
 ## 🛠️ Required Model Weights
 
-All required models can be managed and downloaded automatically via the built-in **⚙️ Setup** overlay in the node:
+All required models can be managed and downloaded automatically via the built-in **⚙ Setup** overlay in the node:
 
 | Model ID | File Name | Type | Folder | HuggingFace Link |
 | :--- | :--- | :--- | :--- | :--- |
@@ -49,6 +49,23 @@ All required models can be managed and downloaded automatically via the built-in
 
 ---
 
+## 📜 Changelog
+
+### Version 1.1.0 (Latest Release)
+
+- 🎨 **1:1 xFlowOne UI Design**: Scoped `.fk-root` dark mode canvas integration with neon lime accents (`#00ff66`) matching `xFlowOne · LTX-2.3`.
+- ⚙️ **Models & Setup Manager**: Added overlay downloader with direct HuggingFace model downloading, live progress bars, pause/resume, deletion, red close button (`#ff4444`), and 100% box containment.
+- 🎨 **Add LoRA Stacker**: Added interactive multi-slot LoRA manager directly in prompt header with strength controls.
+- 📐 **Vector SVG Icons**: Replaced generic OS emojis with custom vector SVG icons across all tabs, mode pills, action buttons, and setup controls.
+- ⚡ **Zero-Native-Inputs Fix**: Updated `INPUT_TYPES` in Python to `required: {}` and `optional: {}` so ComfyUI V2 renders 0 native grey input boxes above the node.
+
+### Version 1.0.0
+
+- 🚀 Initial release of Minimax H3 single-node video interface for ComfyUI.
+- 🎬 Integration of Text-to-Video, Image-to-Video, and Reference + Audio Sync workflows.
+
+---
+
 ## 🚀 Quick Start & Installation
 
 ### Option 1: ComfyUI Custom Nodes Folder
@@ -56,7 +73,7 @@ All required models can be managed and downloaded automatically via the built-in
 1. Clone or extract this repository into your ComfyUI custom nodes directory:
    ```bash
    cd ComfyUI/custom_nodes/
-   git clone https://github.com/naval-group/xFlow-Minimax-H3.git
+   git clone https://github.com/navalyalgam97/xFlow-Minimax-H3.git
    ```
 2. Restart ComfyUI.
 3. Search and spawn **`Minimax H3 One-Node Video`** from the node search menu.
