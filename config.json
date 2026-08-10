@@ -1,0 +1,127 @@
+{
+  "video_modes": {
+    "text_to_video": "Text to Video",
+    "image_to_video": "Image to Video",
+    "reference_to_video": "Reference Image + Audio"
+  },
+  "duration_presets": [1, 2, 4, 8, 16, 30],
+  "fps_options": [24, 30],
+  "motion_strength_templates": [
+    {
+      "label": "Static (minimal motion)",
+      "value": 0.0,
+      "description": "Subtle, nearly static video with ultra-smooth focus"
+    },
+    {
+      "label": "Subtle motion",
+      "value": 0.25,
+      "description": "Gentle, natural movement for portraits and landscapes"
+    },
+    {
+      "label": "Balanced motion",
+      "value": 0.5,
+      "description": "Standard video dynamics with smooth camera motion"
+    },
+    {
+      "label": "Dynamic motion",
+      "value": 0.75,
+      "description": "Energetic, active movement with rich action sequences"
+    },
+    {
+      "label": "Maximum motion",
+      "value": 1.0,
+      "description": "Highly dynamic, fast-paced cinematic motion"
+    }
+  ],
+  "guidance_scale_recommendations": {
+    "min": 1.0,
+    "max": 20.0,
+    "default": 7.5,
+    "tips": "Higher = stricter prompt adherence, Lower = more creative freedom"
+  },
+  "text_to_video_templates": [
+    {
+      "name": "Cinematic travel shot",
+      "prompt": "A cinematic establishing shot of a serene mountain landscape at golden hour. Camera slowly pans across rolling peaks with warm, diffused sunlight casting long shadows. Mist rises from the valley below, creating atmospheric depth. Smooth, professional camera movement. 8K quality, natural color grading."
+    },
+    {
+      "name": "Urban nightlife",
+      "prompt": "A bustling city street at night with neon signs and motion. Cars drive past with light trails, pedestrians move through the frame, buildings reflect in wet pavement. Moody, cinematic lighting with blues and magentas. Dynamic camera movement following the action. Professional video quality."
+    },
+    {
+      "name": "Nature close-up",
+      "prompt": "Macro photography of dewdrops on a leaf, morning sunlight backlighting the droplets. Water droplet slowly rolls, creating ripples. Deep depth of field, blurred green background. Soft, natural lighting. Ultra-smooth motion, 4K resolution."
+    },
+    {
+      "name": "Product showcase",
+      "prompt": "A sleek, modern product rotating slowly on a clean white surface. Studio lighting with soft shadows, highlights gleaming off the product. Camera circles around the product with smooth, professional motion. Minimal, luxury aesthetic. High-quality product photography."
+    },
+    {
+      "name": "Abstract animation",
+      "prompt": "Swirling, flowing abstract shapes in vibrant neon colors: electric blues, hot pinks, and lime greens. Organic motion with liquid dynamics. Particles dance and merge. Smooth transitions between color shifts. Modern, energetic vibe. High energy motion design."
+    },
+    {
+      "name": "Relaxation scene",
+      "prompt": "Peaceful spa scene: candles flickering softly, steam rising from hot water, smooth stones stacked carefully. Soft warm lighting with subtle camera movement. Calming, meditative atmosphere. Gentle, slow motion. Luxurious, serene mood. 4K quality."
+    },
+    {
+      "name": "Food prep montage",
+      "prompt": "Fast-paced cooking montage: colorful vegetables being chopped, sizzling in a pan, sauce being poured. Quick cuts between actions. Warm kitchen lighting, appetizing colors. Professional food photography style. Dynamic, energetic pacing. Mouth-watering presentation."
+    },
+    {
+      "name": "Weather phenomenon",
+      "prompt": "A lightning storm over the ocean. Dark storm clouds roil across the sky, lightning bolts crack across the frame, waves crash against rocks. Epic, dramatic atmosphere. Moody blue and grey color palette. Powerful, cinematic scale. Realistic weather simulation."
+    }
+  ],
+  "image_to_video_templates": [
+    {
+      "name": "Pan and zoom in",
+      "prompt": "Slowly zoom into the center of the image while panning gently. Reveal more detail as the camera moves closer. Maintain the lighting and color consistency from the original image."
+    },
+    {
+      "name": "Steady 360 pan",
+      "prompt": "Rotate the camera smoothly around the subject in a full 360-degree rotation. Keep the same distance from the subject throughout. Maintain consistent lighting and perspective."
+    },
+    {
+      "name": "Subtle parallax",
+      "prompt": "Apply a subtle parallax effect with slow, gentle camera movement. Different depths in the image move at slightly different speeds. Create subtle 3D depth perception while keeping motion minimal."
+    },
+    {
+      "name": "Focus rack",
+      "prompt": "Start with focus on the foreground, gradually shift focus to the background, then back to foreground. Create smooth focus transitions. Maintain the original composition and lighting."
+    }
+  ],
+  "reference_to_video_templates": [
+    {
+      "name": "Lip-sync speaking",
+      "prompt": "Character speaking naturally with clear mouth movements matching the audio. Maintain eye contact with camera. Natural head movements and expressions. Professional video quality."
+    },
+    {
+      "name": "Singing performance",
+      "prompt": "Character singing expressively, mouth movements matching lyrics. Emotional facial expressions. Dynamic head and shoulder movements. Performance lighting. Music video style."
+    },
+    {
+      "name": "Narration with expression",
+      "prompt": "Narrator speaking clearly with expressive facial movements. Authentic emotion matching the spoken content. Natural eye movement and subtle head turns. Professional speaking voice sync."
+    }
+  ],
+  "colors": {
+    "primary": "#59FF00",
+    "primary_hover": "#95FF77",
+    "bg_primary": "#1A1C1B",
+    "bg_secondary": "#2A2E2E",
+    "border": "#555D58",
+    "text_primary": "#dedede",
+    "text_muted": "#565656",
+    "status_generating": "#59FF00",
+    "status_error": "#ff6767",
+    "status_success": "#59FF00"
+  },
+  "generation_settings": {
+    "max_queue_length": 10,
+    "timeout_seconds": 3600,
+    "auto_save_metadata": true,
+    "store_history": true,
+    "max_history_items": 100
+  }
+}

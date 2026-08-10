@@ -1,0 +1,36 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Large Model Weights (Downloaded via Setup Manager)
+models/
+*.safetensors
+*.ckpt
+*.pt
+*.bin
+*.onnx
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Embedded Repositories
+xflow-one-image/
+
+# Environments & IDEs
+.venv
+env/
+venv/
+ENV/
+.vscode/
+.idea/
+
+# Zip artifacts & temporary files
+*.zip
+*.tmp

@@ -1,0 +1,196 @@
+═══════════════════════════════════════════════════════════════════════════
+  MINIMAX H3 ONE-NODE VIDEO - QUICK REFERENCE
+═══════════════════════════════════════════════════════════════════════════
+
+PROJECT STRUCTURE
+─────────────────────────────────────────────────────────────────────────
+custom_nodes/minimax-h3-video/
+  ├─ nodes.py                              Backend Python node
+  ├─ config.json                           UI config + templates
+  ├─ web/
+  │  └─ minimax_h3_video.js               React/JS frontend
+  └─ workflows/
+     ├─ text_to_video_workflow.json
+     ├─ image_to_video_workflow.json
+     └─ reference_to_video_workflow.json
+
+KEY FILES
+─────────────────────────────────────────────────────────────────────────
+minimax_h3_video_nodes.py    ~1.2 KB  Backend node, REST endpoints, metadata
+config.json                   ~30 KB  Templates, presets, color palette
+MinimaxH3Video.jsx            ~40 KB  React component, UI, styling
+workflow JSONs                ~30 KB  Minimax H3 pipelines
+
+COLORS (SimpliUI)
+─────────────────────────────────────────────────────────────────────────
+#59FF00   ← BRIGHT GREEN (buttons, primary action)
+#95FF77   ← SCREAMIN' GREEN (hover states)
+#1A1C1B   ← EERIE BLACK (main background)
+#2A2E2E   ← JET (secondary background)
+#555D58   ← EBONY (borders)
+#dedede   ← TEXT (primary)
+#565656   ← TEXT (muted)
+
+SETUP (5 STEPS)
+─────────────────────────────────────────────────────────────────────────
+1. mkdir -p ComfyUI/custom_nodes/minimax-h3-video/{workflows,web}
+2. cp minimax_h3_video_nodes.py → nodes.py
+3. cp config.json
+4. cp MinimaxH3Video.jsx → web/minimax_h3_video.js
+5. cp Minimax H3 workflows → workflows/
+
+VALIDATE
+─────────────────────────────────────────────────────────────────────────
+python3 -m json.tool config.json > /dev/null      ← Check JSON
+python3 -m py_compile nodes.py                    ← Check Python
+grep '"type"' text_to_video_workflow.json         ← Check nodes
+
+TESTING
+─────────────────────────────────────────────────────────────────────────
+1. Start ComfyUI: python main.py
+2. Add node: Right-click canvas → Add Node → Minimax H3 → One-Node Video
+3. Test mode: Select "Text to Video"
+4. Enter prompt: "A serene mountain landscape"
+5. Click GENERATE VIDEO
+6. Check logs for errors
+
+API ENDPOINTS
+─────────────────────────────────────────────────────────────────────────
+GET  /minimax_h3/config                      ← Returns UI config
+GET  /minimax_h3/workflow_text_to_video      ← Returns T2V workflow
+GET  /minimax_h3/workflow_image_to_video     ← Returns I2V workflow
+GET  /minimax_h3/workflow_reference_to_video ← Returns R2V workflow
+POST /minimax_h3/set_output                  ← Store generation result
+POST /minimax_h3/add_favorite                ← Add to favorites
+POST /minimax_h3/remove_favorite             ← Remove from favorites
+
+NODE INPUT TYPES
+─────────────────────────────────────────────────────────────────────────
+mode: "text_to_video" | "image_to_video" | "reference_to_video"
+duration: INT (1-30 seconds)
+fps: "24" | "30"
+motion_strength: FLOAT (0.0-1.0)
+guidance_scale: FLOAT (1.0-20.0)
+prompt: STRING (optional, required for T2V)
+image: IMAGE (optional, required for I2V)
+reference_image: IMAGE (optional, required for R2V)
+audio_file: AUDIO (optional, recommended for R2V)
+
+NODE OUTPUT
+─────────────────────────────────────────────────────────────────────────
+VIDEO (tuple containing video tensor + metadata)
+Stored as: outputs/MinimaxH3/video_<timestamp>.mp4
+Metadata: outputs/MinimaxH3/metadata/video_<timestamp>.json
+
+CONFIG.JSON STRUCTURE
+─────────────────────────────────────────────────────────────────────────
+{
+  "video_modes": { ... },              ← Mode definitions
+  "duration_presets": [...],           ← Default durations
+  "fps_options": [...],                ← Frame rate options
+  "motion_strength_templates": [...],  ← Motion presets
+  "text_to_video_templates": [...],    ← T2V prompts
+  "image_to_video_templates": [...],   ← I2V prompts
+  "reference_to_video_templates": [...], ← R2V prompts
+  "colors": { ... }                    ← SimpliUI palette
+}
+
+CUSTOMIZATION TIPS
+─────────────────────────────────────────────────────────────────────────
+• Add templates: Edit config.json "text_to_video_templates" array
+• Change colors: Update config.json "colors" object
+• Add modes: Extend SUPPORTED_MODES in nodes.py
+• Modify UI: Edit MinimaxH3Video.jsx React component
+• Adjust sizing: Change NODE_W and NODE_H constants
+
+TROUBLESHOOTING
+─────────────────────────────────────────────────────────────────────────
+Node doesn't appear
+  → Check Python syntax: python -m py_compile nodes.py
+  → Restart ComfyUI server
+  → Clear browser cache
+
+Colors not right
+  → Clear browser cache (Ctrl+Shift+Delete)
+  → Verify config.json has correct hex values
+  → Check CSS variables in DevTools
+
+Workflow errors
+  → Verify all node types exist: grep '"type"' *.json
+  → Check node connections in "links" array
+  → Ensure IDs are integers, not strings
+
+Generation fails
+  → Check ComfyUI logs for workflow errors
+  → Verify GPU has sufficient VRAM (24GB+ recommended)
+  → Confirm Minimax H3 models are installed
+
+DOCUMENTATION FILES
+─────────────────────────────────────────────────────────────────────────
+README.md                    ← User guide & features
+QUICKSTART.md               ← 5-minute setup
+GUIDE.md                    ← Deep architecture explanation
+DESIGN_GUIDE.md             ← UI/color palette details
+IMPLEMENTATION_CHECKLIST.md ← Complete task list
+USING_CLAUDE_CODE.md        ← How to use Claude Code
+QUICK_REFERENCE.txt         ← This file
+
+KEYBOARD SHORTCUTS (if implemented)
+─────────────────────────────────────────────────────────────────────────
+Shift+Enter   ← Generate video
+Ctrl+K        ← Focus prompt input
+Ctrl+M        ← Cycle through modes
+Ctrl+R        ← Reset parameters to defaults
+
+PERFORMANCE TARGETS
+─────────────────────────────────────────────────────────────────────────
+UI Load Time:    < 1 second
+Parameter Response: < 50ms
+Video Generation: 2-5 minutes (depends on model)
+GPU Memory: 24GB+ recommended
+Storage: ~500MB per 4-second video (MP4)
+
+EXAMPLE PROMPTS FOR TESTING
+─────────────────────────────────────────────────────────────────────────
+TEXT-TO-VIDEO:
+  "A serene mountain landscape at sunset, cinematic camera pan"
+  "Abstract flowing shapes in neon colors, smooth motion"
+  "Professional product shot rotating with studio lighting"
+
+IMAGE-TO-VIDEO:
+  "Slowly zoom into the center while panning gently"
+  "Apply subtle parallax effect with gentle movement"
+  "Rotate the camera smoothly around the subject 360 degrees"
+
+REFERENCE-TO-VIDEO (with audio):
+  "Character speaking naturally with mouth matching audio"
+  "Narrator speaking with expressive facial movements"
+  "Singer performing with emotional facial expressions"
+
+GIT COMMANDS (if using version control)
+─────────────────────────────────────────────────────────────────────────
+git checkout -b feature/minimax-h3-video
+git add custom_nodes/minimax-h3-video/
+git commit -m "Add Minimax H3 one-node video interface"
+git push origin feature/minimax-h3-video
+
+USEFUL LINKS
+─────────────────────────────────────────────────────────────────────────
+ComfyUI GitHub:  https://github.com/comfyanonymous/ComfyUI
+xFlow Reference: https://github.com/example/xflow-one-image
+Minimax API:     https://docs.minimaxi.com/
+SimpliUI Guide:  (Your internal documentation)
+
+METRICS TO TRACK
+─────────────────────────────────────────────────────────────────────────
+□ Node load time
+□ UI render performance
+□ Generation queue depth
+□ GPU memory usage
+□ Average video generation time
+□ User satisfaction (favorites/usage count)
+
+═══════════════════════════════════════════════════════════════════════════
+Last Updated: August 2026
+Status: PRODUCTION READY ✅
+═══════════════════════════════════════════════════════════════════════════
