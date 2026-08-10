@@ -534,6 +534,31 @@ app.registerExtension({
         }
       }
 
+      // Inject Webkit Scrollbar CSS for custom xFlow scrollbars
+      if (!document.getElementById("xflow-custom-scroll-style")) {
+        const styleEl = document.createElement("style");
+        styleEl.id = "xflow-custom-scroll-style";
+        styleEl.textContent = `
+          .fk-root ::-webkit-scrollbar, .fk-root *::-webkit-scrollbar {
+            width: 6px !important;
+            height: 6px !important;
+          }
+          .fk-root ::-webkit-scrollbar-track, .fk-root *::-webkit-scrollbar-track {
+            background: #111111 !important;
+            border-radius: 4px !important;
+          }
+          .fk-root ::-webkit-scrollbar-thumb, .fk-root *::-webkit-scrollbar-thumb {
+            background: #2a2a2a !important;
+            border-radius: 4px !important;
+            border: 1px solid #00ff66 !important;
+          }
+          .fk-root ::-webkit-scrollbar-thumb:hover, .fk-root *::-webkit-scrollbar-thumb:hover {
+            background: #00ff66 !important;
+          }
+        `;
+        document.head.appendChild(styleEl);
+      }
+
       // State persistence
       let S = {
         mode: "T2V",
@@ -817,23 +842,25 @@ app.registerExtension({
         }
       };
 
-      // Custom Dropdown Menu Floating Popup
+      // Custom Dropdown Menu Floating Popup (with forced visible custom scrollbar)
       const sizeMenu = mk("div", {
         position: "absolute",
         top: "100%",
         left: "0",
         width: "100%",
-        maxHeight: "240px",
+        maxHeight: "180px",
         background: "#161817",
         border: `1px solid ${LIME}`,
         borderRadius: "8px",
         marginTop: "4px",
         display: "none",
         flexDirection: "column",
-        overflowY: "auto",
+        overflowY: "scroll",
+        overflowX: "hidden",
         zIndex: "9999",
         boxShadow: "0 8px 24px rgba(0,0,0,0.9), 0 0 12px rgba(0, 255, 102, 0.25)",
         boxSizing: "border-box",
+        paddingRight: "2px",
       });
 
       const updateCustomSizeMenu = (orient) => {
