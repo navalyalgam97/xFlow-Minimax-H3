@@ -150,7 +150,8 @@ const ICONS = {
   expand: ["M15 3h6v6", "M9 21H3v-6", "M21 3l-7 7", "M3 21l7-7"],
   collapse: ["M4 14h6v6", "M20 10h-6V4", "M10 14L3 21", "M14 10l7-7"],
   check: "M20 6L9 17l-5-5",
-  sparkle: ["M12 3v3m0 12v3M3 12h3m12 0h3M5.637 5.637l2.122 2.122m8.485 8.485l2.122 2.122M5.637 18.363l2.122-2.122m8.485-8.485l2.122-2.122"]
+  sparkle: ["M12 3v3m0 12v3M3 12h3m12 0h3M5.637 5.637l2.122 2.122m8.485 8.485l2.122 2.122M5.637 18.363l2.122-2.122m8.485-8.485l2.122-2.122"],
+  chevronDown: "M6 9l6 6 6-6"
 };
 
 const svgIcon = (name, size = 14, color = "currentColor", strokeWidth = 2) => {
@@ -955,7 +956,6 @@ app.registerExtension({
 
       updateCustomSizeMenu(S.orientation || "Landscape");
       orientSizeBox.append(sizeTrigger, sizeMenu);
-      leftScrollArea.appendChild(orientSizeBox);
 
       // ── LONGEST SIDE SELECTOR (for I2V & R2V modes, matching Screenshots 1, 2, 3) ──
       const longestSideBox = mk("div", {
@@ -1088,7 +1088,6 @@ app.registerExtension({
       };
       renderShapeChips();
       longestSideBox.appendChild(shapeChipsRow);
-      leftScrollArea.appendChild(longestSideBox);
 
       // CFG Scale & FPS Row (2 Columns: CFG SCALE on left, FPS on right)
       const cfgFpsRow = mk("div", { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" });
@@ -1244,7 +1243,6 @@ app.registerExtension({
 
       fpsBox.append(fpsTrigger, fpsMenu);
       cfgFpsRow.append(cfgBox, fpsBox);
-      leftScrollArea.appendChild(cfgFpsRow);
 
       // Duration Box with Custom Visual Interactive Drag Slider (1-10s, default 4s, Full Width)
       const durBox = mk("div", {
@@ -1385,7 +1383,6 @@ app.registerExtension({
       };
 
       durBox.append(sliderTrackContainer, durInfoLbl);
-      leftScrollArea.appendChild(durBox);
 
       // SEED Control Box (Matching Screenshot 2 1:1 with xFlow Neon Green Shuffle Button)
       const seedBox = mk("div", {
@@ -1513,7 +1510,6 @@ app.registerExtension({
 
       seedCtrlRow.append(minusBtn, seedInputEl, randomizerBtn, plusBtn);
       seedBox.appendChild(seedCtrlRow);
-      leftScrollArea.appendChild(seedBox);
 
       // ── MEDIA INPUT SLOT CARD (Dynamic for I2V & R2V modes) ──
       const slotCard = mk("div", {
@@ -1833,7 +1829,84 @@ app.registerExtension({
 
       slotGrid.append(box1, box2Img, box2Audio);
       slotCard.appendChild(slotGrid);
-      leftScrollArea.appendChild(slotCard);
+
+      // ── ADVANCED OPTIONS EXPANDABLE ACCORDION CARD ──────────────────────
+      const advAccordion = mk("div", {
+        background: C.bg2,
+        borderRadius: "6px",
+        border: `1px solid ${C.border}`,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        boxSizing: "border-box",
+        transition: "all 0.2s ease",
+      });
+
+      const advHeader = mk("div", {
+        padding: "8px 10px",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        cursor: "pointer",
+        userSelect: "none",
+        background: C.bg2,
+        transition: "all 0.15s ease",
+      });
+
+      const advTitleGroup = mk("div", { display: "flex", alignItems: "center", gap: "6px" });
+      const advGearIcon = svgIcon("settings", 13, C.muted);
+      const advTitle = mk("span", { fontSize: "11px", fontWeight: "800", letterSpacing: ".08em", color: C.muted, textTransform: "uppercase" }, { textContent: "Advanced Options" });
+      advTitleGroup.append(advGearIcon, advTitle);
+
+      const advChevron = svgIcon("chevronDown", 13, C.muted);
+      advChevron.style.transition = "transform 0.2s ease";
+
+      advHeader.append(advTitleGroup, advChevron);
+
+      const advBody = mk("div", {
+        display: "flex",
+        flexDirection: "column",
+        gap: "10px",
+        padding: "10px",
+        borderTop: `1px solid ${C.border}`,
+        background: C.bg1,
+      });
+
+      let isAdvOpen = true;
+      advHeader.onclick = (e) => {
+        e.stopPropagation();
+        isAdvOpen = !isAdvOpen;
+        advBody.style.display = isAdvOpen ? "flex" : "none";
+        advChevron.style.transform = isAdvOpen ? "rotate(180deg)" : "rotate(0deg)";
+        advHeader.style.background = isAdvOpen ? C.bg1 : C.bg2;
+        advTitle.style.color = isAdvOpen ? LIME : C.muted;
+        advGearIcon.setAttribute("stroke", isAdvOpen ? LIME : C.muted);
+        advChevron.setAttribute("stroke", isAdvOpen ? LIME : C.muted);
+      };
+
+      advHeader.onmouseover = () => {
+        if (!isAdvOpen) {
+          advTitle.style.color = LIME;
+          advGearIcon.setAttribute("stroke", LIME);
+          advChevron.setAttribute("stroke", LIME);
+        }
+      };
+      advHeader.onmouseout = () => {
+        if (!isAdvOpen) {
+          advTitle.style.color = C.muted;
+          advGearIcon.setAttribute("stroke", C.muted);
+          advChevron.setAttribute("stroke", C.muted);
+        }
+      };
+
+      advAccordion.append(advHeader, advBody);
+      advBody.append(longestSideBox, cfgFpsRow, seedBox);
+
+      // Append items to leftScrollArea in exact requested order:
+      // 1. Upload Images / Media Input Card
+      // 2. Duration Box
+      // 3. Advanced Options Accordion
+      leftScrollArea.append(orientSizeBox, slotCard, durBox, advAccordion);
 
       // BIG GREEN GENERATE BUTTON with Sparkle Vector Icon
       const genBtnGroup = mk("div", { display: "flex", gap: "8px", marginTop: "auto" });
