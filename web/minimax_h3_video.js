@@ -894,7 +894,7 @@ app.registerExtension({
       // Duration & FPS Row
       const durFpsRow = mk("div", { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" });
       
-      // Duration Box with Slider (1-10s, default 4s, xFlow Neon Green style)
+      // Duration Box with Custom Visual Interactive Drag Slider (1-10s, default 4s)
       const durBox = mk("div", {
         background: C.bg2,
         padding: "8px 10px",
@@ -902,27 +902,69 @@ app.registerExtension({
         border: `1px solid ${C.border}`,
         display: "flex",
         flexDirection: "column",
-        gap: "4px",
+        gap: "6px",
         boxSizing: "border-box",
       });
 
       const durHeader = mk("div", { display: "flex", justifyContent: "space-between", alignItems: "center" });
       durHeader.appendChild(cap("DURATION"));
-      const curDur = parseInt(S.duration) || 4;
+      let curDur = parseInt(S.duration) || 4;
+      if (curDur < 1) curDur = 1;
+      if (curDur > 10) curDur = 10;
+      S.duration = curDur;
+
       const durValueLbl = mk("span", { fontSize: "11px", fontWeight: "800", color: LIME }, { textContent: `${curDur}s` });
       durHeader.appendChild(durValueLbl);
       durBox.appendChild(durHeader);
 
-      const durSlider = mk("input", {
-        type: "range",
-        min: "1",
-        max: "10",
-        step: "1",
-        value: curDur,
+      // Custom Interactive Slider Track Container
+      const sliderTrackContainer = mk("div", {
         width: "100%",
+        height: "18px",
+        display: "flex",
+        alignItems: "center",
+        position: "relative",
         cursor: "pointer",
+        userSelect: "none",
         boxSizing: "border-box",
       });
+
+      const sliderTrackBg = mk("div", {
+        width: "100%",
+        height: "8px",
+        background: "#222222",
+        borderRadius: "4px",
+        position: "relative",
+        border: `1px solid ${C.border}`,
+        overflow: "visible",
+        transition: "border-color 0.15s ease",
+      });
+
+      const sliderFill = mk("div", {
+        height: "100%",
+        width: `${((curDur - 1) / 9) * 100}%`,
+        background: LIME_GRAD,
+        borderRadius: "4px",
+        position: "absolute",
+        left: "0",
+        top: "0",
+      });
+
+      const sliderThumb = mk("div", {
+        width: "14px",
+        height: "14px",
+        borderRadius: "50%",
+        background: LIME,
+        position: "absolute",
+        top: "-3px",
+        left: `calc(${((curDur - 1) / 9) * 100}% - 7px)`,
+        boxShadow: "0 0 8px rgba(0, 255, 102, 0.6)",
+        cursor: "grab",
+        transition: "transform 0.1s ease",
+      });
+
+      sliderTrackBg.append(sliderFill, sliderThumb);
+      sliderTrackContainer.appendChild(sliderTrackBg);
 
       const calcFramesText = (sec, fps) => {
         const frames = Math.round(sec * fps);
@@ -933,15 +975,64 @@ app.registerExtension({
         textContent: calcFramesText(curDur, parseInt(S.fps) || 24)
       });
 
-      durSlider.oninput = () => {
-        const val = parseInt(durSlider.value);
+      let isDraggingDuration = false;
+
+      const updateDurationFromMouse = (evt) => {
+        const rect = sliderTrackContainer.getBoundingClientRect();
+        let offsetX = evt.clientX - rect.left;
+        if (offsetX < 0) offsetX = 0;
+        if (offsetX > rect.width) offsetX = rect.width;
+
+        let pct = rect.width > 0 ? offsetX / rect.width : 0;
+        let val = Math.round(pct * 9) + 1;
+        if (val < 1) val = 1;
+        if (val > 10) val = 10;
+
         S.duration = val;
+        const fillPct = ((val - 1) / 9) * 100;
+        sliderFill.style.width = `${fillPct}%`;
+        sliderThumb.style.left = `calc(${fillPct}% - 7px)`;
         durValueLbl.textContent = `${val}s`;
         durInfoLbl.textContent = calcFramesText(val, parseInt(S.fps) || 24);
         persist();
       };
 
-      durBox.append(durSlider, durInfoLbl);
+      sliderTrackContainer.onmousedown = (evt) => {
+        isDraggingDuration = true;
+        sliderThumb.style.cursor = "grabbing";
+        sliderThumb.style.transform = "scale(1.2)";
+        sliderTrackBg.style.borderColor = LIME;
+        updateDurationFromMouse(evt);
+
+        const onMouseMove = (moveEvt) => {
+          if (isDraggingDuration) updateDurationFromMouse(moveEvt);
+        };
+
+        const onMouseUp = () => {
+          isDraggingDuration = false;
+          sliderThumb.style.cursor = "grab";
+          sliderThumb.style.transform = "scale(1)";
+          sliderTrackBg.style.borderColor = C.border;
+          window.removeEventListener("mousemove", onMouseMove);
+          window.removeEventListener("mouseup", onMouseUp);
+        };
+
+        window.addEventListener("mousemove", onMouseMove);
+        window.addEventListener("mouseup", onMouseUp);
+      };
+
+      sliderTrackContainer.onmouseover = () => {
+        sliderTrackBg.style.borderColor = LIME;
+        sliderThumb.style.transform = "scale(1.15)";
+      };
+      sliderTrackContainer.onmouseout = () => {
+        if (!isDraggingDuration) {
+          sliderTrackBg.style.borderColor = C.border;
+          sliderThumb.style.transform = "scale(1)";
+        }
+      };
+
+      durBox.append(sliderTrackContainer, durInfoLbl);
       durFpsRow.appendChild(durBox);
 
       // FPS Custom Dropdown (Matching xFlow Style 1:1)
