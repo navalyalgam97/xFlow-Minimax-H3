@@ -151,7 +151,9 @@ const ICONS = {
   collapse: ["M4 14h6v6", "M20 10h-6V4", "M10 14L3 21", "M14 10l7-7"],
   check: "M20 6L9 17l-5-5",
   sparkle: ["M12 3v3m0 12v3M3 12h3m12 0h3M5.637 5.637l2.122 2.122m8.485 8.485l2.122 2.122M5.637 18.363l2.122-2.122m8.485-8.485l2.122-2.122"],
-  chevronDown: "M6 9l6 6 6-6"
+  chevronDown: "M6 9l6 6 6-6",
+  mic: ["M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3z", "M19 10v2a7 7 0 01-14 0v-2", "M12 19v3"],
+  music: ["M9 18V5l12-2v13", "M6 21a3 3 0 100-6 3 3 0 000 6z", "M18 19a3 3 0 100-6 3 3 0 000 6z"]
 };
 
 const svgIcon = (name, size = 14, color = "currentColor", strokeWidth = 2) => {
@@ -1527,7 +1529,7 @@ app.registerExtension({
       let imgData2 = null;
       let audioData = null;
 
-      // Audio Sync Mode Pill Switch Bar for R2V mode (NONE, SPEAK, SING)
+      // Audio Sync Mode Pill Switch Bar for R2V mode (SPEAK vs SING with vector icons)
       const r2vSwitchRow = mk("div", {
         display: "none",
         alignItems: "center",
@@ -1541,40 +1543,50 @@ app.registerExtension({
         marginBottom: "2px",
       });
 
-      const noneBtn = mk("button", {
-        flex: "1", padding: "4px 0", fontSize: "10px", fontWeight: "800",
-        borderRadius: "4px", border: "none", cursor: "pointer", transition: "all 0.15s ease",
-        background: LIME, color: "#111"
-      }, { textContent: "NONE" });
-
       const speakBtn = mk("button", {
-        flex: "1", padding: "4px 0", fontSize: "10px", fontWeight: "800",
+        flex: "1", padding: "5px 0", fontSize: "11px", fontWeight: "800",
         borderRadius: "4px", border: "none", cursor: "pointer", transition: "all 0.15s ease",
-        background: "transparent", color: C.text
-      }, { textContent: "🗣 SPEAK" });
+        background: LIME, color: "#111",
+        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px"
+      });
+      const speakIcon = svgIcon("mic", 13, "#111");
+      speakBtn.append(speakIcon, document.createTextNode("SPEAK"));
 
       const singBtn = mk("button", {
-        flex: "1", padding: "4px 0", fontSize: "10px", fontWeight: "800",
+        flex: "1", padding: "5px 0", fontSize: "11px", fontWeight: "800",
         borderRadius: "4px", border: "none", cursor: "pointer", transition: "all 0.15s ease",
-        background: "transparent", color: C.text
-      }, { textContent: "🎵 SING" });
+        background: "transparent", color: C.text,
+        display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px"
+      });
+      const singIcon = svgIcon("music", 13, C.text);
+      singBtn.append(singIcon, document.createTextNode("SING"));
 
       const updateR2vSwitch = (type) => {
-        S.r2v_type = type || "NONE";
+        S.r2v_type = type === "SING" ? "SING" : "SPEAK";
         persist();
-        [noneBtn, speakBtn, singBtn].forEach((btn, idx) => {
-          const modeVal = ["NONE", "SPEAK", "SING"][idx];
-          const isActive = S.r2v_type === modeVal;
-          btn.style.background = isActive ? LIME : "transparent";
-          btn.style.color = isActive ? "#111" : C.text;
-        });
+        if (S.r2v_type === "SPEAK") {
+          speakBtn.style.background = LIME;
+          speakBtn.style.color = "#111";
+          speakIcon.setAttribute("stroke", "#111");
+
+          singBtn.style.background = "transparent";
+          singBtn.style.color = C.text;
+          singIcon.setAttribute("stroke", C.text);
+        } else {
+          singBtn.style.background = LIME;
+          singBtn.style.color = "#111";
+          singIcon.setAttribute("stroke", "#111");
+
+          speakBtn.style.background = "transparent";
+          speakBtn.style.color = C.text;
+          speakIcon.setAttribute("stroke", C.text);
+        }
       };
 
-      noneBtn.onclick = (e) => { e.stopPropagation(); updateR2vSwitch("NONE"); };
       speakBtn.onclick = (e) => { e.stopPropagation(); updateR2vSwitch("SPEAK"); };
       singBtn.onclick = (e) => { e.stopPropagation(); updateR2vSwitch("SING"); };
 
-      r2vSwitchRow.append(noneBtn, speakBtn, singBtn);
+      r2vSwitchRow.append(speakBtn, singBtn);
       slotCard.appendChild(r2vSwitchRow);
 
       const createImgUploadBox = (headerNode, slotKey) => {
@@ -3025,7 +3037,7 @@ app.registerExtension({
           longestSideBox.style.display = "flex";
           slotCard.style.display = "flex";
           r2vSwitchRow.style.display = "flex";
-          updateR2vSwitch(S.r2v_type || "NONE");
+          updateR2vSwitch(S.r2v_type === "SING" ? "SING" : "SPEAK");
           box1HeaderLbl.textContent = "REF IMAGE";
           box2Img.style.display = "none";
           box2Audio.style.display = "flex";
