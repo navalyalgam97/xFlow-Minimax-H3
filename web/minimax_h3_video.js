@@ -1718,6 +1718,9 @@ app.registerExtension({
           boxSizing: "border-box",
           position: "relative",
           minHeight: "135px",
+          minWidth: "0",
+          width: "100%",
+          overflow: "hidden",
         });
 
         const hdr = mk("div", { display: "flex", justifyContent: "space-between", alignItems: "center" });
@@ -1846,6 +1849,9 @@ app.registerExtension({
           boxSizing: "border-box",
           position: "relative",
           minHeight: "135px",
+          minWidth: "0",
+          width: "100%",
+          overflow: "hidden",
         });
 
         const hdr = mk("div", { display: "flex", justifyContent: "space-between", alignItems: "center" });
@@ -1890,6 +1896,8 @@ app.registerExtension({
           flexDirection: "column",
           position: "relative",
           width: "100%",
+          maxWidth: "100%",
+          minWidth: "0",
           flex: "1",
           borderRadius: "4px",
           overflow: "hidden",
@@ -1902,8 +1910,22 @@ app.registerExtension({
           gap: "4px",
         });
 
-        const nameLbl = mk("span", { fontSize: "10px", fontWeight: "700", color: LIME, maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
-        const audioPlayer = mk("audio", { controls: true, style: "width: 100%; height: 26px; outline: none;" });
+        const nameLbl = mk("span", {
+          fontSize: "10px",
+          fontWeight: "700",
+          color: LIME,
+          width: "100%",
+          maxWidth: "100%",
+          minWidth: "0",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+          display: "block",
+          textAlign: "left",
+          boxSizing: "border-box",
+          paddingRight: "36px",
+        });
+        const audioPlayer = mk("audio", { controls: true, style: "width: 100%; max-width: 100%; min-width: 0; height: 26px; outline: none; box-sizing: border-box;" });
 
         let currentUploadedAudioFile = null;
 
@@ -1963,9 +1985,10 @@ app.registerExtension({
 
       const slotGrid = mk("div", {
         display: "grid",
-        gridTemplateColumns: "1fr 1fr",
+        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
         gap: "8px",
         width: "100%",
+        minWidth: "0",
         boxSizing: "border-box",
       });
 
