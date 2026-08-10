@@ -3,7 +3,7 @@
 <div align="center">
 
 ![xFlowOne Banner](https://img.shields.io/badge/xFlowOne-Minimax_H3-00ff66?style=for-the-badge&logo=comfyui&logoColor=black)
-![Version](https://img.shields.io/badge/version-1.5.0-00ff66?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.7.0-00ff66?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
 
 *A single-node, 1:1 `xFlowOne` design system UI for Minimax H3 Video Generation in ComfyUI V2.*
@@ -18,7 +18,13 @@
 - 🎬 **3 Operational Generation Modes**:
   - **T2V (Text to Video)**: Generate high-fidelity videos directly from text prompts with Orientation & Size custom dropdowns.
   - **I2V (Image to Video)**: Symmetrical side-by-side square upload boxes (`START FRAME` & `END FRAME (OPT)`) with automatic workflow switching (First Frame vs. First + Last Frame).
-  - **R2V (Ref + Audio)**: Sync reference images with audio input files.
+  - **R2V (Ref + Audio)**: Sync reference images with audio input files with dynamic **SPEAK** (speech lip sync) and **SING** (singing audio sync) workflow routing.
+- 🎛 **Web Audio API Waveform Cropper & Timeline Editor**:
+  - Full-screen canvas editor with interactive bracket handles (`[` & `]`), timeline zoom (`1x` - `10x`, `Fit Selection`), crop length selector, 16-bit PCM WAV trimmer, and instant HTML5 audio reload.
+- 📖 **Embedded Inline Help Panel & Social Hub**:
+  - In-node user guide, Pixaroma credits, and community links for **Discord** (`https://discord.gg/dnfaGvcsE`) and **GitHub** (`https://github.com/navalyalgam97/xFlow-Minimax-H3`) with dynamic vector SVG icons.
+- ⚙️ **Embedded Inline Setup Panel**:
+  - In-node models downloader and manager with real-time download progress, MB/s speed badges, pause, resume, delete actions, and HuggingFace links.
 - 📐 **Proportional Aspect Ratio Shape Icons**:
   - Ratio chips render exact visual shape outlines (`16:9` landscape, `9:16` tall portrait, `2:3` portrait, `1:1` square, `keep` dashed frame).
 - 🖼 **Dual Square Upload Boxes & Maximise Preview Overlay**:
@@ -32,9 +38,7 @@
 - 🎛 **CFG Scale Defaulted to 1.0**:
   - Matched font family & weight 1:1 with all UI controls.
 - 🎨 **Add LoRA Models Manager**:
-  - Interactive multi-slot LoRA stacker directly in the prompt area.
-  - Real-time scan of local `ComfyUI/models/loras/` safetensors.
-  - Adjustable model strength sliders (0.0 to 2.0).
+  - Interactive multi-slot LoRA stacker directly in the prompt area with strength sliders (0.0 to 2.0).
 - 🎨 **Minimal Vector SVG Icon Library**:
   - Custom vector SVG icons across all mode pills, tabs, actions, and controls for crisp retina rendering.
 - 📺 **Interactive Media Preview Player**:
@@ -44,7 +48,7 @@
 
 ## 🛠️ Required Model Weights
 
-All required models can be managed and downloaded automatically via the built-in **⚙ Setup** overlay in the node:
+All required models can be managed and downloaded automatically via the built-in **⚙ Setup** panel in the node:
 
 | Model ID | File Name | Type | Folder | HuggingFace Link |
 | :--- | :--- | :--- | :--- | :--- |
@@ -58,16 +62,24 @@ All required models can be managed and downloaded automatically via the built-in
 
 ## 📜 Changelog
 
-### Version 1.4.0 (Latest Release)
+### Version 1.7.0 (Latest Release)
 
-- 🖼 **Dual Image Upload Boxes**: Added `START FRAME (First Frame)` & `END FRAME (Last Frame - Optional)` upload controls.
-- 🔍 **Maximise Image Preview (`⤢`)**: Full-screen modal viewer with dimensions badge (`Width × Height px`).
-- 🔀 **Automatic Workflow Branching**: Auto-switches between **First Frame** (`image_to_video`) and **First Frame + Last Frame** (`image_to_video_fflf`) based on uploaded image count.
-- 🔴 **Red Close Button Uniformity**: Styled `longestSideOverlay` close button identically to `Setup` overlay (`#ff4444`).
-- 🎨 **Orientation & Size Custom Dropdowns**: Clean white resolution numbers with xFlow neon green hover glow.
-- 🎞 **Custom FPS Dropdown**: xFlow styled 24 FPS / 30 FPS selection menu.
-- ⚡ **Visual Duration Slider**: 1-10s range slider in neon green with live frame calculation.
-- 🎲 **Interactive Seed Controls**: Minus, neon green shuffle button, and plus controls.
+- 📖 **Embedded Inline Help Panel**: Step-by-step user guides for **T2V**, **I2V (FFLF)**, **R2V (SPEAK / SING)**, and **Advanced Options**.
+- 🙏 **Pixaroma Credits & Thanks**: Dedicated acknowledgements section for Pixaroma open-source workflows.
+- 💬 **Community & Social Links**: **Join Discord Server** (`https://discord.gg/dnfaGvcsE`) and **GitHub Repository** (`https://github.com/navalyalgam97/xFlow-Minimax-H3`) buttons with custom vector SVG icons (`discord`, `github`) using `window.open()`.
+- ⚙️ **Embedded Inline Setup Panel**: Embedded inline Setup drawer panel matching the Help panel 1:1 in layout, topBar visibility, and bottom prompt bar visibility with full model cards, download progress, and speed badges.
+- 🔄 **Mode Tab Auto-Close**: Switching mode tabs (`T2V`, `I2V`, `R2V`) automatically closes active Help or Setup drawers.
+
+### Version 1.6.0
+
+- 🎛 **Web Audio API Waveform Cropper & Timeline Editor Modal**: Full-screen canvas editor with interactive bracket handles (`[` & `]`), time ruler, timeline zoom & stretch (`1x` to `10x`, `Fit Selection`), duration selector presets, 16-bit PCM WAV trimmer, and HTML5 audio player reload.
+- 🎙️ / 🎵 **Dynamic SPEAK vs SING Engine**: Added SPEAK vs SING pill selector in R2V mode, automatically routing to `reference_to_video` for speech lip-sync or `reference_to_video_sing` for singing video sync.
+
+### Version 1.5.0
+
+- 📐 **Proportional Aspect Ratio Icons**: Ratio chips render exact visual shape outlines.
+- 🖼 **Side-by-Side Dual Square Upload Boxes**: Equal side-by-side squares (`START FRAME` & `END FRAME`).
+- 🔍 **Maximise Image Preview (`⤢`)**: Full-screen modal viewer with dimension badge.
 
 ### Version 1.3.0
 
