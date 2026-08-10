@@ -2,6 +2,20 @@
 
 All notable changes to the **xFlowOne · Minimax H3** single-node video interface for ComfyUI.
 
+## [1.5.0] - 2026-08-10
+
+### 🚀 Proportional Aspect Ratio Icons & Symmetrical Dual Square Upload Boxes
+- **📐 Proportional Aspect Ratio Shape Icons**:
+  - Replaced static square icons with dynamic proportional shape icons across all ratio chips (`16:9` landscape, `9:16` tall portrait, `2:3` portrait, `1:1` square, `keep` dashed frame).
+- **🖼 Side-by-Side Symmetrical Square Upload Boxes**:
+  - Rendered 2 side-by-side square boxes with matching headers: **`START FRAME`** and **`END FRAME (OPT)`**.
+  - Attached hidden file input to `document.body` for 100% reliable native OS file picker triggering on click.
+  - Added clear file extension labels **`(.png, .jpg, .webp)`** and drag-and-drop support.
+- **🔍 Full-Screen Maximise Image Preview (`⤢`)**:
+  - High-res image modal viewer overlay with backdrop blur, image dimensions (`Width × Height px`), and red close button (`#ff4444`).
+
+---
+
 ## [1.4.0] - 2026-08-10
 
 ### 🚀 Dual Image Uploads, Maximise Preview & Automatic Workflow Branching
