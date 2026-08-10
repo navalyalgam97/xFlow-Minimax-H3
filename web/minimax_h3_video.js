@@ -1097,13 +1097,64 @@ app.registerExtension({
       helpInlineDrawer.appendChild(secSocial);
       pad.appendChild(helpInlineDrawer);
 
-      // Toggle Help Drawer Handler
+      // ── INLINE SETUP & MODELS MANAGER DRAWER PANEL (Embedded inside Node UI) ──
+      const setupInlineDrawer = mk("div", {
+        display: "none",
+        flexDirection: "column",
+        gap: "14px",
+        background: C.bg1,
+        border: `1px solid ${LIME}`,
+        borderRadius: "8px",
+        padding: "16px",
+        boxSizing: "border-box",
+        width: "100%",
+        marginBottom: "10px",
+      });
+
+      const setupHdr = mk("div", {
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        paddingBottom: "8px",
+        borderBottom: `1px solid ${C.border}`,
+      });
+
+      const setupTitleGroup = mk("div", { display: "flex", alignItems: "center", gap: "8px" });
+      const setupTitleIcon = svgIcon("settings", 16, LIME);
+      const setupTitleText = mk("span", { fontSize: "14px", fontWeight: "900", color: "#fff", letterSpacing: ".04em" }, { textContent: "xFlow Minimax H3 - Models & Setup Manager" });
+      setupTitleGroup.append(setupTitleIcon, setupTitleText);
+
+      const setupCloseBtn = mk("button", {
+        padding: "4px 10px", fontSize: "11px", fontWeight: "700", background: "#ff4444", color: "#fff",
+        border: "none", borderRadius: "4px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px"
+      });
+      setupCloseBtn.append(svgIcon("close", 11, "#fff"), document.createTextNode("Close"));
+      setupHdr.append(setupTitleGroup, setupCloseBtn);
+      setupInlineDrawer.appendChild(setupHdr);
+
+      const modelsGrid = mk("div", {
+        display: "flex",
+        flexDirection: "column",
+        gap: "10px",
+        width: "100%",
+        boxSizing: "border-box",
+      });
+      setupInlineDrawer.appendChild(modelsGrid);
+      pad.appendChild(setupInlineDrawer);
+
+      // Alias for backwards compatibility
+      const settingsOverlay = setupInlineDrawer;
+
+      // Drawer Switching Logic
       let isHelpDrawerOpen = false;
-      const toggleHelpDrawer = () => {
-        isHelpDrawerOpen = !isHelpDrawerOpen;
+      let isSetupDrawerOpen = false;
+
+      const toggleHelpDrawer = (forceState = null) => {
+        isHelpDrawerOpen = forceState !== null ? forceState : !isHelpDrawerOpen;
         if (isHelpDrawerOpen) {
-          if (settingsOverlay.style.display === "flex") {
-            closeOverlay(settingsOverlay);
+          if (isSetupDrawerOpen) {
+            isSetupDrawerOpen = false;
+            setupInlineDrawer.style.display = "none";
             modelsBtn.style.borderColor = C.border;
             modelsBtn.style.color = C.text;
           }
@@ -1119,14 +1170,33 @@ app.registerExtension({
         }
       };
 
-      helpBtn.onclick = (e) => {
-        e.stopPropagation();
-        toggleHelpDrawer();
+      const toggleSetupDrawer = (forceState = null) => {
+        isSetupDrawerOpen = forceState !== null ? forceState : !isSetupDrawerOpen;
+        if (isSetupDrawerOpen) {
+          if (isHelpDrawerOpen) {
+            isHelpDrawerOpen = false;
+            helpInlineDrawer.style.display = "none";
+            helpBtn.style.borderColor = C.border;
+            helpBtn.style.color = C.text;
+          }
+          setupInlineDrawer.style.display = "flex";
+          mainRow.style.display = "none";
+          modelsBtn.style.borderColor = LIME;
+          modelsBtn.style.color = LIME;
+          fetchAndRenderModels();
+        } else {
+          setupInlineDrawer.style.display = "none";
+          mainRow.style.display = "flex";
+          modelsBtn.style.borderColor = C.border;
+          modelsBtn.style.color = C.text;
+        }
       };
-      helpCloseBtn.onclick = (e) => {
-        e.stopPropagation();
-        toggleHelpDrawer();
-      };
+
+      helpBtn.onclick = (e) => { e.stopPropagation(); toggleHelpDrawer(); };
+      helpCloseBtn.onclick = (e) => { e.stopPropagation(); toggleHelpDrawer(false); };
+
+      modelsBtn.onclick = (e) => { e.stopPropagation(); toggleSetupDrawer(); };
+      setupCloseBtn.onclick = (e) => { e.stopPropagation(); toggleSetupDrawer(false); };
 
       // ── MAIN CONTENT ROW (2 Columns: Left Controls + Right Preview) ────────
       const mainRow = mk("div", {
@@ -2754,90 +2824,40 @@ app.registerExtension({
 
       promptSection.append(promptHdr, loraDrawer, promptTA, negCollapse);
       pad.appendChild(promptSection);
-      root.appendChild(pad);
 
-      // ── OVERLAYS (Models & Setup Manager + Gallery) ────────────────────────
-      const settingsOverlay = mk("div", {
-        position: "absolute",
-        top: "0",
-        left: "0",
-        right: "0",
-        bottom: "0",
-        width: "100%",
-        height: "100%",
-        background: C.bg0,
-        zIndex: "100",
+      // ── MODELS MANAGER & SETUP (INLINE DRAWER) ────────────────────────
+      const setupInlineDrawer = mk("div", {
         display: "none",
         flexDirection: "column",
-        padding: "16px",
-        boxSizing: "border-box",
-        borderRadius: "12px",
-        opacity: "0",
-        transform: "translateY(6px)",
-        transition: "opacity .22s, transform .22s",
-        overflow: "hidden",
-      });
-
-      const setHeader = mk("div", {
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        paddingBottom: "10px",
-        marginBottom: "12px",
-        borderBottom: `1px solid ${C.border}`,
+        gap: "10px",
         width: "100%",
+        border: `1px solid ${C.border}`,
+        borderRadius: "8px",
+        padding: "12px",
+        marginTop: "10px",
         boxSizing: "border-box",
+        background: C.bg0,
       });
-
-      const setNavTitleGroup = mk("div", { display: "flex", alignItems: "center", gap: "8px" });
-      const setNavIcon = svgIcon("settings", 18, LIME);
-      const setNavText = mk("span", { fontSize: "15px", fontWeight: "900", color: "#fff", letterSpacing: ".04em" }, { textContent: "xFlow Minimax H3 - Models & Setup Manager" });
-      setNavTitleGroup.append(setNavIcon, setNavText);
-
-      const closeSetBtn = mk("button", {
-        padding: "6px 14px", fontSize: "11px", fontWeight: "700", background: "#ff4444", color: "#fff",
-        border: "none", borderRadius: "6px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "6px"
-      });
-      closeSetBtn.append(svgIcon("close", 12, "#fff"), document.createTextNode("Close"));
-
-      closeSetBtn.onmouseover = () => (closeSetBtn.style.background = "#ff6666");
-      closeSetBtn.onmouseout = () => (closeSetBtn.style.background = "#ff4444");
-      closeSetBtn.onclick = (e) => {
-        e.stopPropagation();
-        closeOverlay(settingsOverlay);
-        modelsBtn.style.borderColor = C.border;
-        modelsBtn.style.color = C.text;
-      };
-      setHeader.append(setNavTitleGroup, closeSetBtn);
-      settingsOverlay.appendChild(setHeader);
 
       const modelsGrid = mk("div", {
         display: "flex",
         flexDirection: "column",
         gap: "10px",
-        flex: "1",
-        overflowY: "auto",
-        overflowX: "hidden",
         width: "100%",
         boxSizing: "border-box",
-        paddingRight: "4px",
       });
-      settingsOverlay.appendChild(modelsGrid);
-      root.appendChild(settingsOverlay);
+      setupInlineDrawer.appendChild(modelsGrid);
+      pad.appendChild(setupInlineDrawer);
 
-      modelsBtn.onclick = (e) => {
-        e.stopPropagation();
-        const isOpen = settingsOverlay.style.display === "flex";
-        if (isOpen) {
-          closeOverlay(settingsOverlay);
-          modelsBtn.style.borderColor = C.border;
-          modelsBtn.style.color = C.text;
-        } else {
-          if (isHelpDrawerOpen) toggleHelpDrawer();
+      modelsBtn.onclick = () => {
+        const isOpen = setupInlineDrawer.style.display === "flex";
+        setupInlineDrawer.style.display = isOpen ? "none" : "flex";
+        if (!isOpen) {
           fetchAndRenderModels();
-          openOverlay(settingsOverlay);
-          modelsBtn.style.borderColor = LIME;
-          modelsBtn.style.color = LIME;
+          startPollingModels();
+        } else {
+          clearInterval(pollInterval);
+          pollInterval = null;
         }
       };
 
@@ -2850,7 +2870,6 @@ app.registerExtension({
 
       const renderModelCards = (list) => {
         modelsGrid.innerHTML = "";
-        let anyDl = false;
 
         // Bulk Download All Missing Weights Button Banner
         const missingCount = list.filter(m => !m.installed).length;
