@@ -3854,7 +3854,22 @@ app.registerExtension({
 
       // Generate Action Handler
       genBtn.onclick = async () => {
-        const report = await checkSystemValidation(S.mode);
+        let activeWorkflowMode = S.mode;
+        if (S.mode === "I2V") {
+          if (imgData1 && imgData2) {
+            activeWorkflowMode = "image_to_video_fflf";
+          } else {
+            activeWorkflowMode = "image_to_video";
+          }
+        } else if (S.mode === "R2V") {
+          if (S.r2v_type === "SING") {
+            activeWorkflowMode = "reference_to_video_sing";
+          } else {
+            activeWorkflowMode = "reference_to_video";
+          }
+        }
+
+        const report = await checkSystemValidation(activeWorkflowMode);
         if (!report || !report.valid) {
           alert(`⚠️ MISSING REQUIRED MINIMAX H3 MODELS!\nPlease click 'Setup' to download missing weights.`);
           fetchAndRenderModels();
@@ -3870,21 +3885,6 @@ app.registerExtension({
         statusRow.style.display = "flex";
         tx(statusLabel, "Queuing workflow...");
         progressBarInner.style.width = "15%";
-
-        let activeWorkflowMode = S.mode;
-        if (S.mode === "I2V") {
-          if (imgData1 && imgData2) {
-            activeWorkflowMode = "image_to_video_fflf";
-          } else {
-            activeWorkflowMode = "image_to_video";
-          }
-        } else if (S.mode === "R2V") {
-          if (S.r2v_type === "SING") {
-            activeWorkflowMode = "reference_to_video_sing";
-          } else {
-            activeWorkflowMode = "reference_to_video";
-          }
-        }
 
         try {
           await executePixaromaWorkflow(activeWorkflowMode, {

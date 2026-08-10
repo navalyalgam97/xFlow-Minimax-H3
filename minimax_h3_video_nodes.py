@@ -378,12 +378,14 @@ def validate_minimax_environment(mode: str = "text_to_video") -> Dict[str, Any]:
     missing_models = []
     missing_nodes = []
 
-    for m_id in ["fl2va" if mode != "reference_to_video" else "ref2va", "clip", "video_vae"]:
+    is_r2v = mode.startswith("reference_to_video") or mode == "R2V"
+
+    for m_id in ["ref2va" if is_r2v else "fl2va", "clip", "video_vae"]:
         st = get_model_status_dict(m_id)
         if not st["installed"]:
             missing_models.append(st)
 
-    if mode == "reference_to_video":
+    if is_r2v:
         st_audio = get_model_status_dict("audio_vae")
         if not st_audio["installed"]:
             missing_models.append(st_audio)
@@ -395,7 +397,7 @@ def validate_minimax_environment(mode: str = "text_to_video") -> Dict[str, Any]:
         registry = {}
 
     req_nodes = ["PixaromaSaveMp4"]
-    if mode == "reference_to_video":
+    if is_r2v:
         req_nodes.extend(["MiniMaxH3ReferenceToVideo", "PixaromaH3AudioSync"])
     else:
         req_nodes.extend(["MiniMaxH3ImageToVideo"])
