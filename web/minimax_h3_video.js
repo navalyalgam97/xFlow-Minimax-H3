@@ -247,7 +247,7 @@ const formatBytes = (bytes) => {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
 };
 
-// Web Audio API Waveform Canvas Renderer
+// Web Audio API Interactive Waveform Canvas Renderer with Timeline Ruler & Bracket Handles
 function drawAudioWaveform(canvas, audioBuffer, startTime = 0, endTime = null) {
   const ctx = canvas.getContext("2d");
   const width = canvas.width;
@@ -259,15 +259,55 @@ function drawAudioWaveform(canvas, audioBuffer, startTime = 0, endTime = null) {
   const rawData = audioBuffer.getChannelData(0);
   const totalSamples = rawData.length;
   const duration = audioBuffer.duration;
+  const et = endTime == null ? duration : endTime;
 
-  const startSample = Math.floor((startTime / duration) * totalSamples);
-  const endSample = Math.min(totalSamples, Math.floor(((endTime || duration) / duration) * totalSamples));
+  const rulerHeight = 22;
+  const waveTop = rulerHeight;
+  const waveHeight = height - rulerHeight;
 
+  // 1. BACKGROUND
+  ctx.fillStyle = "#0c0d0d";
+  ctx.fillRect(0, 0, width, height);
+
+  // 2. TIMELINE SECONDS RULER (Top 22px)
+  ctx.fillStyle = "#161817";
+  ctx.fillRect(0, 0, width, rulerHeight);
+  ctx.strokeStyle = "#2b2e2c";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, rulerHeight);
+  ctx.lineTo(width, rulerHeight);
+  ctx.stroke();
+
+  // Draw Time Ticks & Labels
+  const numTicks = 8;
+  ctx.font = "9px system-ui, -apple-system, sans-serif";
+  ctx.fillStyle = "#777777";
+  ctx.textAlign = "center";
+
+  for (let i = 0; i <= numTicks; i++) {
+    const x = (i / numTicks) * width;
+    const tSec = (i / numTicks) * duration;
+    
+    const mins = Math.floor(tSec / 60);
+    const secs = (tSec % 60).toFixed(0);
+    const label = mins > 0 ? `${mins}m${secs}s` : `${secs}s`;
+
+    ctx.beginPath();
+    ctx.moveTo(x, rulerHeight - 5);
+    ctx.lineTo(x, rulerHeight);
+    ctx.strokeStyle = "#3a3d3b";
+    ctx.stroke();
+
+    ctx.fillText(label, Math.max(12, Math.min(width - 12, x)), rulerHeight - 7);
+  }
+
+  // 3. WAVEFORM BARS
   const numBars = Math.floor(width / 3);
   const samplesPerBar = Math.floor(totalSamples / numBars);
 
-  ctx.fillStyle = "#111111";
-  ctx.fillRect(0, 0, width, height);
+  const startSample = Math.floor((startTime / duration) * totalSamples);
+  const endSample = Math.min(totalSamples, Math.floor((et / duration) * totalSamples));
 
   for (let i = 0; i < numBars; i++) {
     const start = i * samplesPerBar;
@@ -279,16 +319,57 @@ function drawAudioWaveform(canvas, audioBuffer, startTime = 0, endTime = null) {
       if (val > max) max = val;
     }
 
-    const barHeight = Math.max(2, (max - min) * (height / 2) * 0.85);
+    const barHeight = Math.max(2, (max - min) * (waveHeight / 2) * 0.85);
     const x = i * 3;
-    const y = (height - barHeight) / 2;
+    const y = waveTop + (waveHeight - barHeight) / 2;
 
     const samplePos = start;
     const isInCropRegion = samplePos >= startSample && samplePos <= endSample;
 
-    ctx.fillStyle = isInCropRegion ? "#00ff66" : "#444444";
+    ctx.fillStyle = isInCropRegion ? "#00ff66" : "#333333";
     ctx.fillRect(x, y, 2, barHeight);
   }
+
+  // 4. SHADED OVERLAY FOR NON-SELECTED REGIONS
+  const startX = (startTime / duration) * width;
+  const endX = (et / duration) * width;
+
+  // Left dimmed overlay
+  ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+  ctx.fillRect(0, waveTop, startX, waveHeight);
+
+  // Right dimmed overlay
+  ctx.fillRect(endX, waveTop, width - endX, waveHeight);
+
+  // Crop Region Border Box
+  ctx.strokeStyle = "#00ff66";
+  ctx.lineWidth = 1.5;
+  ctx.strokeRect(startX, waveTop, Math.max(2, endX - startX), waveHeight);
+
+  // 5. BRACKET HANDLES ([ and ])
+  const handleW = 10;
+
+  // Left Bracket Handle
+  ctx.fillStyle = "#00ff66";
+  ctx.fillRect(startX - handleW / 2, waveTop, handleW, waveHeight);
+  ctx.fillStyle = "#111111";
+  ctx.fillRect(startX - 1, waveTop + waveHeight / 2 - 8, 2, 16);
+
+  // Right Bracket Handle
+  ctx.fillStyle = "#00ff66";
+  ctx.fillRect(endX - handleW / 2, waveTop, handleW, waveHeight);
+  ctx.fillStyle = "#111111";
+  ctx.fillRect(endX - 1, waveTop + waveHeight / 2 - 8, 2, 16);
+
+  // 6. FLOATING TIME RANGE TOOLTIP
+  const cropDurSec = (et - startTime).toFixed(1);
+  const badgeTxt = `[ ${startTime.toFixed(1)}s  ──►  ${et.toFixed(1)}s  (${cropDurSec}s) ]`;
+  ctx.font = "bold 10px system-ui, sans-serif";
+  ctx.fillStyle = "#00ff66";
+  ctx.textAlign = "center";
+
+  const badgeX = Math.max(80, Math.min(width - 80, (startX + endX) / 2));
+  ctx.fillText(badgeTxt, badgeX, waveTop + 14);
 }
 
 // Trims AudioBuffer from startTime to endTime and encodes to 16-bit PCM WAV Blob
@@ -3356,6 +3437,12 @@ app.registerExtension({
       let previewAudioCtx = null;
       let previewSourceNode = null;
 
+      // Mouse Drag State for Waveform Bracket Handles
+      let activeDragMode = null; // "left", "right", "center"
+      let dragStartMouseX = 0;
+      let dragStartSt = 0;
+      let dragStartCropLen = 4.0;
+
       const setCropLength = (valSec) => {
         const totalDur = currentAudioBuffer ? currentAudioBuffer.duration : 100;
         let targetL = valSec == null ? totalDur : valSec;
@@ -3383,6 +3470,90 @@ app.registerExtension({
 
         drawAudioWaveform(aeCanvas, currentAudioBuffer, st, et);
       };
+
+      // Waveform Canvas Mouse Event Listeners (Draggable Handles & Selection Box)
+      aeCanvas.style.cursor = "crosshair";
+
+      const getCanvasTimeFromMouse = (e) => {
+        const rect = aeCanvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const width = rect.width || aeCanvas.width;
+        const duration = currentAudioBuffer ? currentAudioBuffer.duration : 1;
+        return Math.max(0, Math.min(duration, (mouseX / width) * duration));
+      };
+
+      aeCanvas.onmousedown = (e) => {
+        if (!currentAudioBuffer) return;
+        const duration = currentAudioBuffer.duration;
+        const rect = aeCanvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const width = rect.width || aeCanvas.width;
+
+        let st = parseFloat(startSlider.value) || 0;
+        let cropLen = parseFloat(lenNumInput.value) || 4.0;
+        let et = Math.min(duration, st + cropLen);
+
+        const startX = (st / duration) * width;
+        const endX = (et / duration) * width;
+
+        const handleThreshold = 12;
+
+        if (Math.abs(mouseX - startX) <= handleThreshold) {
+          activeDragMode = "left";
+        } else if (Math.abs(mouseX - endX) <= handleThreshold) {
+          activeDragMode = "right";
+        } else if (mouseX >= startX && mouseX <= endX) {
+          activeDragMode = "center";
+          dragStartMouseX = mouseX;
+          dragStartSt = st;
+        } else {
+          // Jump Start Position to click position
+          const clickTime = getCanvasTimeFromMouse(e);
+          let newSt = Math.min(duration - cropLen, clickTime);
+          startSlider.value = newSt.toFixed(1);
+          activeDragMode = "center";
+          dragStartMouseX = mouseX;
+          dragStartSt = newSt;
+          updateCropView();
+        }
+      };
+
+      window.addEventListener("mousemove", (e) => {
+        if (!activeDragMode || !currentAudioBuffer || audioEditorOverlay.style.display === "none") return;
+        const duration = currentAudioBuffer.duration;
+        const rect = aeCanvas.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const width = rect.width || aeCanvas.width;
+
+        let st = parseFloat(startSlider.value) || 0;
+        let cropLen = parseFloat(lenNumInput.value) || 4.0;
+        let et = Math.min(duration, st + cropLen);
+
+        if (activeDragMode === "left") {
+          const clickTime = getCanvasTimeFromMouse(e);
+          const newSt = Math.min(et - 0.5, clickTime);
+          const newLen = et - newSt;
+          startSlider.value = newSt.toFixed(1);
+          lenNumInput.value = newLen.toFixed(1);
+          updateCropView();
+        } else if (activeDragMode === "right") {
+          const clickTime = getCanvasTimeFromMouse(e);
+          const newEt = Math.max(st + 0.5, clickTime);
+          const newLen = newEt - st;
+          lenNumInput.value = newLen.toFixed(1);
+          updateCropView();
+        } else if (activeDragMode === "center") {
+          const deltaX = mouseX - dragStartMouseX;
+          const deltaTime = (deltaX / width) * duration;
+          let newSt = Math.max(0, Math.min(duration - cropLen, dragStartSt + deltaTime));
+          startSlider.value = newSt.toFixed(1);
+          updateCropView();
+        }
+      });
+
+      window.addEventListener("mouseup", () => {
+        activeDragMode = null;
+      });
 
       const openAudioEditor = async (file, fileName) => {
         currentRawAudioFile = file;
