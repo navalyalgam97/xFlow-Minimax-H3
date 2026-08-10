@@ -348,7 +348,27 @@ const formatBytes = (bytes) => {
       background: #00ff66;
       border: none;
       cursor: pointer;
-      box-shadow: 0 0 8px rgba(0, 255, 102, 0.5);
+    }
+    /* xFlow Custom Webkit Scrollbars */
+    ::-webkit-scrollbar,
+    *::-webkit-scrollbar {
+      width: 6px !important;
+      height: 6px !important;
+    }
+    ::-webkit-scrollbar-track,
+    *::-webkit-scrollbar-track {
+      background: #111111 !important;
+      border-radius: 4px !important;
+    }
+    ::-webkit-scrollbar-thumb,
+    *::-webkit-scrollbar-thumb {
+      background: #2a2a2a !important;
+      border-radius: 4px !important;
+      border: 1px solid #00ff66 !important;
+    }
+    ::-webkit-scrollbar-thumb:hover,
+    *::-webkit-scrollbar-thumb:hover {
+      background: #00ff66 !important;
     }
   `;
   document.head.appendChild(styleEl);
@@ -532,31 +552,6 @@ app.registerExtension({
           w.hidden = true;
           w.type = "hidden";
         }
-      }
-
-      // Inject Webkit Scrollbar CSS for custom xFlow scrollbars
-      if (!document.getElementById("xflow-custom-scroll-style")) {
-        const styleEl = document.createElement("style");
-        styleEl.id = "xflow-custom-scroll-style";
-        styleEl.textContent = `
-          .fk-root ::-webkit-scrollbar, .fk-root *::-webkit-scrollbar {
-            width: 6px !important;
-            height: 6px !important;
-          }
-          .fk-root ::-webkit-scrollbar-track, .fk-root *::-webkit-scrollbar-track {
-            background: #111111 !important;
-            border-radius: 4px !important;
-          }
-          .fk-root ::-webkit-scrollbar-thumb, .fk-root *::-webkit-scrollbar-thumb {
-            background: #2a2a2a !important;
-            border-radius: 4px !important;
-            border: 1px solid #00ff66 !important;
-          }
-          .fk-root ::-webkit-scrollbar-thumb:hover, .fk-root *::-webkit-scrollbar-thumb:hover {
-            background: #00ff66 !important;
-          }
-        `;
-        document.head.appendChild(styleEl);
       }
 
       // State persistence
