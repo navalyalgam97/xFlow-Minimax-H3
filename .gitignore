@@ -11,6 +11,10 @@ models/
 *.bin
 *.onnx
 
+# Local Outputs & Runtime States
+output/
+favorites.json
+
 # OS generated files
 .DS_Store
 .DS_Store?
