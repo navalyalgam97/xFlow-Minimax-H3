@@ -911,7 +911,7 @@ app.registerExtension({
       topBar.append(titleGroup, pillsContainer, topActions);
       pad.appendChild(topBar);
 
-      // ── INLINE HELP DRAWER PANEL (Embedded inside Node UI) ──
+      // ── INLINE HELP DRAWER PANEL (Embedded inside Node UI - No Popup Window!) ──
       const helpInlineDrawer = mk("div", {
         display: "none",
         flexDirection: "column",
@@ -1041,6 +1041,7 @@ app.registerExtension({
 
       const socialRow = mk("div", { display: "flex", gap: "8px" });
 
+      // Discord Button with window.open()
       const discordBtn = mk("button", {
         flex: "1",
         padding: "8px 12px",
@@ -1060,8 +1061,13 @@ app.registerExtension({
       });
       const discordIcon = svgIcon("discord", 15, "#ffffff");
       discordBtn.append(discordIcon, document.createTextNode("Join Discord Server"));
-      discordBtn.onclick = (e) => { e.stopPropagation(); window.open("https://discord.gg/dnfaGvcsE", "_blank"); };
 
+      discordBtn.onclick = (e) => {
+        e.stopPropagation();
+        window.open("https://discord.gg/dnfaGvcsE", "_blank");
+      };
+
+      // GitHub Profile Button with window.open()
       const githubBtn = mk("button", {
         flex: "1",
         padding: "8px 12px",
@@ -1080,112 +1086,35 @@ app.registerExtension({
       });
       const githubIcon = svgIcon("github", 15, "#ffffff");
       githubBtn.append(githubIcon, document.createTextNode("GitHub Repository"));
-      githubBtn.onclick = (e) => { e.stopPropagation(); window.open("https://github.com/navalyalgam97/xFlow-Minimax-H3", "_blank"); };
+
+      githubBtn.onclick = (e) => {
+        e.stopPropagation();
+        window.open("https://github.com/navalyalgam97/xFlow-Minimax-H3", "_blank");
+      };
 
       socialRow.append(discordBtn, githubBtn);
       secSocial.appendChild(socialRow);
       helpInlineDrawer.appendChild(secSocial);
       pad.appendChild(helpInlineDrawer);
 
-      // ── INLINE SETUP & MODELS MANAGER DRAWER PANEL (Embedded inside Node UI) ──
-      const setupInlineDrawer = mk("div", {
-        display: "none",
-        flexDirection: "column",
-        gap: "14px",
-        background: C.bg1,
-        border: `1px solid ${LIME}`,
-        borderRadius: "8px",
-        padding: "16px",
-        boxSizing: "border-box",
-        width: "100%",
-        marginBottom: "10px",
-      });
-
-      const setHeader = mk("div", {
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        paddingBottom: "8px",
-        borderBottom: `1px solid ${C.border}`,
-        width: "100%",
-        boxSizing: "border-box",
-      });
-
-      const setNavTitleGroup = mk("div", { display: "flex", alignItems: "center", gap: "8px" });
-      const setNavIcon = svgIcon("settings", 16, LIME);
-      const setNavText = mk("span", { fontSize: "14px", fontWeight: "900", color: "#fff", letterSpacing: ".04em" }, { textContent: "xFlow Minimax H3 - Models & Setup Manager" });
-      setNavTitleGroup.append(setNavIcon, setNavText);
-
-      const closeSetBtn = mk("button", {
-        padding: "4px 10px", fontSize: "11px", fontWeight: "700", background: "#ff4444", color: "#fff",
-        border: "none", borderRadius: "4px", cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "4px"
-      });
-      closeSetBtn.append(svgIcon("close", 11, "#fff"), document.createTextNode("Close"));
-      setHeader.append(setNavTitleGroup, closeSetBtn);
-      setupInlineDrawer.appendChild(setHeader);
-
-      const modelsGrid = mk("div", {
-        display: "flex",
-        flexDirection: "column",
-        gap: "10px",
-        width: "100%",
-        boxSizing: "border-box",
-      });
-      setupInlineDrawer.appendChild(modelsGrid);
-      pad.appendChild(setupInlineDrawer);
-
-      // Drawer Switching Logic
+      // Toggle Help Drawer Handler
       let isHelpDrawerOpen = false;
-      let isSetupDrawerOpen = false;
-
-      const toggleHelpDrawer = (forceState = null) => {
-        isHelpDrawerOpen = forceState !== null ? forceState : !isHelpDrawerOpen;
-        if (isHelpDrawerOpen) {
-          if (isSetupDrawerOpen) {
-            isSetupDrawerOpen = false;
-            setupInlineDrawer.style.display = "none";
-            modelsBtn.style.borderColor = C.border;
-            modelsBtn.style.color = C.text;
-          }
-          helpInlineDrawer.style.display = "flex";
-          mainRow.style.display = "none";
-          helpBtn.style.borderColor = LIME;
-          helpBtn.style.color = LIME;
-        } else {
-          helpInlineDrawer.style.display = "none";
-          mainRow.style.display = "flex";
-          helpBtn.style.borderColor = C.border;
-          helpBtn.style.color = C.text;
-        }
+      const toggleHelpDrawer = () => {
+        isHelpDrawerOpen = !isHelpDrawerOpen;
+        helpInlineDrawer.style.display = isHelpDrawerOpen ? "flex" : "none";
+        mainRow.style.display = isHelpDrawerOpen ? "none" : "flex";
+        helpBtn.style.borderColor = isHelpDrawerOpen ? LIME : C.border;
+        helpBtn.style.color = isHelpDrawerOpen ? LIME : C.text;
       };
 
-      const toggleSetupDrawer = (forceState = null) => {
-        isSetupDrawerOpen = forceState !== null ? forceState : !isSetupDrawerOpen;
-        if (isSetupDrawerOpen) {
-          if (isHelpDrawerOpen) {
-            isHelpDrawerOpen = false;
-            helpInlineDrawer.style.display = "none";
-            helpBtn.style.borderColor = C.border;
-            helpBtn.style.color = C.text;
-          }
-          setupInlineDrawer.style.display = "flex";
-          mainRow.style.display = "none";
-          modelsBtn.style.borderColor = LIME;
-          modelsBtn.style.color = LIME;
-          fetchAndRenderModels();
-        } else {
-          setupInlineDrawer.style.display = "none";
-          mainRow.style.display = "flex";
-          modelsBtn.style.borderColor = C.border;
-          modelsBtn.style.color = C.text;
-        }
+      helpBtn.onclick = (e) => {
+        e.stopPropagation();
+        toggleHelpDrawer();
       };
-
-      helpBtn.onclick = (e) => { e.stopPropagation(); toggleHelpDrawer(); };
-      helpCloseBtn.onclick = (e) => { e.stopPropagation(); toggleHelpDrawer(false); };
-
-      modelsBtn.onclick = (e) => { e.stopPropagation(); toggleSetupDrawer(); };
-      closeSetBtn.onclick = (e) => { e.stopPropagation(); toggleSetupDrawer(false); };
+      helpCloseBtn.onclick = (e) => {
+        e.stopPropagation();
+        toggleHelpDrawer();
+      };
 
       // ── MAIN CONTENT ROW (2 Columns: Left Controls + Right Preview) ────────
       const mainRow = mk("div", {
@@ -4149,8 +4078,9 @@ app.registerExtension({
 
         const report = await checkSystemValidation(activeWorkflowMode);
         if (!report || !report.valid) {
-          alert(`⚠️ MISSING REQUIRED MINIMAX H3 MODELS!\nPlease download missing weights in the Setup panel.`);
-          toggleSetupDrawer(true);
+          alert(`⚠️ MISSING REQUIRED MINIMAX H3 MODELS!\nPlease click 'Setup' to download missing weights.`);
+          fetchAndRenderModels();
+          openOverlay(settingsOverlay);
           return;
         }
 
