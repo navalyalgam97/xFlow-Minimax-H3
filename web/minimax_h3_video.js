@@ -48,13 +48,13 @@ const RESOLUTIONS = {
   Portrait: [
     { label: "352 × 608", w: 352, h: 608 },
     { label: "416 × 736", w: 416, h: 736 },
-    { label: "480 × 864 ★", w: 480, h: 864, rec: true },
+    { label: "480 × 864", w: 480, h: 864 },
     { label: "544 × 960", w: 544, h: 960 },
     { label: "608 × 1056", w: 608, h: 1056 },
     { label: "640 × 1152", w: 640, h: 1152 },
-    { label: "672 × 1216 ★", w: 672, h: 1216, rec: true },
+    { label: "672 × 1216", w: 672, h: 1216 },
     { label: "736 × 1280", w: 736, h: 1280 },
-    { label: "768 × 1344 ★", w: 768, h: 1344, rec: true },
+    { label: "768 × 1344", w: 768, h: 1344 },
     { label: "768 × 1376", w: 768, h: 1376 },
     { label: "832 × 1504", w: 832, h: 1504 },
     { label: "928 × 1664", w: 928, h: 1664 },
@@ -64,13 +64,13 @@ const RESOLUTIONS = {
   Landscape: [
     { label: "608 × 352", w: 608, h: 352 },
     { label: "736 × 416", w: 736, h: 416 },
-    { label: "864 × 480 ★", w: 864, h: 480, rec: true },
+    { label: "864 × 480", w: 864, h: 480 },
     { label: "960 × 544", w: 960, h: 544 },
     { label: "1056 × 608", w: 1056, h: 608 },
     { label: "1152 × 640", w: 1152, h: 640 },
-    { label: "1216 × 672 ★", w: 1216, h: 672, rec: true },
+    { label: "1216 × 672", w: 1216, h: 672 },
     { label: "1280 × 736", w: 1280, h: 736 },
-    { label: "1344 × 768 ★", w: 1344, h: 768, rec: true },
+    { label: "1344 × 768", w: 1344, h: 768 },
     { label: "1376 × 768", w: 1376, h: 768 },
     { label: "1504 × 832", w: 1504, h: 832 },
     { label: "1664 × 928", w: 1664, h: 928 },
@@ -684,7 +684,7 @@ app.registerExtension({
       const sizeTrigger = mk("div", {
         width: "100%",
         background: C.bg1,
-        color: LIME,
+        color: C.text,
         border: `1px solid ${C.border}`,
         borderRadius: "6px",
         padding: "8px 12px",
@@ -699,18 +699,20 @@ app.registerExtension({
       });
 
       const sizeTriggerLabel = mk("span", {}, { textContent: `${S.width} × ${S.height}` });
-      const sizeTriggerArrow = svgIcon("expand", 11, LIME);
+      const sizeTriggerArrow = svgIcon("expand", 11, C.muted);
       sizeTrigger.append(sizeTriggerLabel, sizeTriggerArrow);
 
       // Hover Effect: xFlow Neon Green Border!
       sizeTrigger.onmouseover = () => {
         sizeTrigger.style.borderColor = LIME;
         sizeTrigger.style.boxShadow = `0 0 10px rgba(0, 255, 102, 0.3)`;
+        sizeTriggerArrow.setAttribute("stroke", LIME);
       };
       sizeTrigger.onmouseout = () => {
         if (sizeMenu.style.display !== "flex") {
           sizeTrigger.style.borderColor = C.border;
           sizeTrigger.style.boxShadow = "none";
+          sizeTriggerArrow.setAttribute("stroke", C.muted);
         }
       };
 
@@ -750,7 +752,7 @@ app.registerExtension({
             padding: "8px 12px",
             fontSize: "12px",
             fontWeight: "700",
-            color: isSelected ? "#111" : (resItem.rec ? LIME : C.text),
+            color: isSelected ? "#111" : C.text,
             background: isSelected ? LIME : "transparent",
             cursor: "pointer",
             display: "flex",
@@ -776,7 +778,7 @@ app.registerExtension({
           itemEl.onmouseout = () => {
             if (!isSelected) {
               itemEl.style.background = "transparent";
-              itemEl.style.color = resItem.rec ? LIME : C.text;
+              itemEl.style.color = C.text;
               itemEl.style.borderLeftColor = "transparent";
             }
           };
@@ -867,16 +869,132 @@ app.registerExtension({
       durBox.appendChild(durInput);
       durFpsRow.appendChild(durBox);
 
-      const fpsBox = mk("div", { background: C.bg2, padding: "8px 10px", borderRadius: "6px", border: `1px solid ${C.border}` });
-      fpsBox.appendChild(cap("FPS"));
-      const fpsSelect = mk("select", { width: "100%", background: C.bg1, color: C.text, border: `1px solid ${C.border}`, borderRadius: "4px", padding: "4px", fontSize: "11px", outline: "none", cursor: "pointer", boxSizing: "border-box" });
-      ["24", "30"].forEach(f => {
-        const opt = mk("option", { value: f, textContent: `${f} FPS` });
-        if (f === String(S.fps)) opt.selected = true;
-        fpsSelect.appendChild(opt);
+      // FPS Custom Dropdown (Matching xFlow Style 1:1)
+      const fpsBox = mk("div", {
+        background: C.bg2,
+        padding: "8px 10px",
+        borderRadius: "6px",
+        border: `1px solid ${C.border}`,
+        position: "relative",
       });
-      fpsSelect.onchange = () => { S.fps = fpsSelect.value; persist(); };
-      fpsBox.appendChild(fpsSelect);
+      fpsBox.appendChild(cap("FPS"));
+
+      const fpsTrigger = mk("div", {
+        width: "100%",
+        background: C.bg1,
+        color: C.text,
+        border: `1px solid ${C.border}`,
+        borderRadius: "4px",
+        padding: "6px 8px",
+        fontSize: "11px",
+        fontWeight: "700",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        boxSizing: "border-box",
+        transition: "all 0.15s ease",
+      });
+
+      const fpsTriggerLabel = mk("span", {}, { textContent: `${S.fps} FPS` });
+      const fpsTriggerArrow = svgIcon("expand", 10, C.muted);
+      fpsTrigger.append(fpsTriggerLabel, fpsTriggerArrow);
+
+      fpsTrigger.onmouseover = () => {
+        fpsTrigger.style.borderColor = LIME;
+        fpsTrigger.style.boxShadow = `0 0 8px rgba(0, 255, 102, 0.25)`;
+        fpsTriggerArrow.setAttribute("stroke", LIME);
+      };
+      fpsTrigger.onmouseout = () => {
+        if (fpsMenu.style.display !== "flex") {
+          fpsTrigger.style.borderColor = C.border;
+          fpsTrigger.style.boxShadow = "none";
+          fpsTriggerArrow.setAttribute("stroke", C.muted);
+        }
+      };
+
+      const fpsMenu = mk("div", {
+        position: "absolute",
+        top: "100%",
+        left: "0",
+        width: "100%",
+        background: "#161817",
+        border: `1px solid ${LIME}`,
+        borderRadius: "6px",
+        marginTop: "4px",
+        display: "none",
+        flexDirection: "column",
+        zIndex: "9999",
+        boxShadow: "0 6px 18px rgba(0,0,0,0.9)",
+        overflow: "hidden",
+        boxSizing: "border-box",
+      });
+
+      const renderFpsMenu = () => {
+        fpsMenu.innerHTML = "";
+        ["24", "30"].forEach(fVal => {
+          const isSelected = String(S.fps) === fVal;
+          const itemEl = mk("div", {
+            padding: "6px 10px",
+            fontSize: "11px",
+            fontWeight: "700",
+            color: isSelected ? "#111" : C.text,
+            background: isSelected ? LIME : "transparent",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            transition: "all 0.12s ease",
+          }, { textContent: `${fVal} FPS` });
+
+          itemEl.onmouseover = () => {
+            if (!isSelected) {
+              itemEl.style.background = "#222b24";
+              itemEl.style.color = LIME;
+            }
+          };
+          itemEl.onmouseout = () => {
+            if (!isSelected) {
+              itemEl.style.background = "transparent";
+              itemEl.style.color = C.text;
+            }
+          };
+
+          itemEl.onclick = (evt) => {
+            evt.stopPropagation();
+            S.fps = parseInt(fVal);
+            fpsTriggerLabel.textContent = `${fVal} FPS`;
+            fpsMenu.style.display = "none";
+            fpsTrigger.style.borderColor = C.border;
+            fpsTrigger.style.boxShadow = "none";
+            fpsTriggerArrow.setAttribute("stroke", C.muted);
+            persist();
+            renderFpsMenu();
+          };
+
+          fpsMenu.appendChild(itemEl);
+        });
+      };
+
+      renderFpsMenu();
+
+      fpsTrigger.onclick = (evt) => {
+        evt.stopPropagation();
+        const isOpen = fpsMenu.style.display === "flex";
+        fpsMenu.style.display = isOpen ? "none" : "flex";
+        fpsTrigger.style.borderColor = isOpen ? LIME : C.border;
+        fpsTrigger.style.boxShadow = isOpen ? `0 0 8px rgba(0, 255, 102, 0.25)` : "none";
+        fpsTriggerArrow.setAttribute("stroke", isOpen ? LIME : C.muted);
+      };
+
+      document.addEventListener("click", () => {
+        fpsMenu.style.display = "none";
+        fpsTrigger.style.borderColor = C.border;
+        fpsTrigger.style.boxShadow = "none";
+        fpsTriggerArrow.setAttribute("stroke", C.muted);
+      });
+
+      fpsBox.append(fpsTrigger, fpsMenu);
       durFpsRow.appendChild(fpsBox);
       leftCol.appendChild(durFpsRow);
 
