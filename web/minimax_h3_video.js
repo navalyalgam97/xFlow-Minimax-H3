@@ -285,6 +285,38 @@ const formatBytes = (bytes) => {
       font-weight: 700 !important;
       padding: 8px !important;
     }
+    .fk-root input[type=range] {
+      -webkit-appearance: none;
+      appearance: none;
+      height: 6px;
+      background: #222222;
+      border-radius: 3px;
+      outline: none;
+      margin: 4px 0;
+    }
+    .fk-root input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #00ff66;
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(0, 255, 102, 0.5);
+      transition: transform 0.12s ease;
+    }
+    .fk-root input[type=range]::-webkit-slider-thumb:hover {
+      transform: scale(1.25);
+    }
+    .fk-root input[type=range]::-moz-range-thumb {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #00ff66;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 0 8px rgba(0, 255, 102, 0.5);
+    }
   `;
   document.head.appendChild(styleEl);
 })();
@@ -862,11 +894,54 @@ app.registerExtension({
       // Duration & FPS Row
       const durFpsRow = mk("div", { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" });
       
-      const durBox = mk("div", { background: C.bg2, padding: "8px 10px", borderRadius: "6px", border: `1px solid ${C.border}` });
-      durBox.appendChild(cap("DURATION (SEC)"));
-      const durInput = mk("input", { type: "number", min: "1", max: "30", value: S.duration, width: "100%", background: C.bg1, color: C.text, border: `1px solid ${C.border}`, borderRadius: "4px", padding: "4px 8px", fontSize: "11px", outline: "none", boxSizing: "border-box" });
-      durInput.oninput = () => { S.duration = durInput.value; persist(); };
-      durBox.appendChild(durInput);
+      // Duration Box with Slider (1-10s, default 4s, xFlow Neon Green style)
+      const durBox = mk("div", {
+        background: C.bg2,
+        padding: "8px 10px",
+        borderRadius: "6px",
+        border: `1px solid ${C.border}`,
+        display: "flex",
+        flexDirection: "column",
+        gap: "4px",
+        boxSizing: "border-box",
+      });
+
+      const durHeader = mk("div", { display: "flex", justifyContent: "space-between", alignItems: "center" });
+      durHeader.appendChild(cap("DURATION"));
+      const curDur = parseInt(S.duration) || 4;
+      const durValueLbl = mk("span", { fontSize: "11px", fontWeight: "800", color: LIME }, { textContent: `${curDur}s` });
+      durHeader.appendChild(durValueLbl);
+      durBox.appendChild(durHeader);
+
+      const durSlider = mk("input", {
+        type: "range",
+        min: "1",
+        max: "10",
+        step: "1",
+        value: curDur,
+        width: "100%",
+        cursor: "pointer",
+        boxSizing: "border-box",
+      });
+
+      const calcFramesText = (sec, fps) => {
+        const frames = Math.round(sec * fps);
+        return `${sec}s → ${frames} frames`;
+      };
+
+      const durInfoLbl = mk("div", { fontSize: "10px", color: C.muted, fontWeight: "600", marginTop: "2px" }, {
+        textContent: calcFramesText(curDur, parseInt(S.fps) || 24)
+      });
+
+      durSlider.oninput = () => {
+        const val = parseInt(durSlider.value);
+        S.duration = val;
+        durValueLbl.textContent = `${val}s`;
+        durInfoLbl.textContent = calcFramesText(val, parseInt(S.fps) || 24);
+        persist();
+      };
+
+      durBox.append(durSlider, durInfoLbl);
       durFpsRow.appendChild(durBox);
 
       // FPS Custom Dropdown (Matching xFlow Style 1:1)
