@@ -698,7 +698,7 @@ app.registerExtension({
         boxSizing: "border-box",
       });
 
-      // LEFT COLUMN CONTROLS (with internal scroll containment to guarantee fixed node size)
+      // LEFT COLUMN CONTROLS (with pinned Generate button and internal scroll area)
       const leftCol = mk("div", {
         width: "320px",
         display: "flex",
@@ -706,11 +706,20 @@ app.registerExtension({
         gap: "10px",
         flexShrink: "0",
         boxSizing: "border-box",
-        maxHeight: "440px",
+        height: "100%",
+      });
+
+      const leftScrollArea = mk("div", {
+        display: "flex",
+        flexDirection: "column",
+        gap: "10px",
+        flex: "1",
         overflowY: "auto",
         overflowX: "hidden",
         paddingRight: "4px",
+        boxSizing: "border-box",
       });
+      leftCol.appendChild(leftScrollArea);
 
       // ── ORIENTATION & SIZE SELECTOR (xFlow Custom UI) ─────────────────
       const orientSizeBox = mk("div", {
@@ -946,7 +955,7 @@ app.registerExtension({
 
       updateCustomSizeMenu(S.orientation || "Landscape");
       orientSizeBox.append(sizeTrigger, sizeMenu);
-      leftCol.appendChild(orientSizeBox);
+      leftScrollArea.appendChild(orientSizeBox);
 
       // ── LONGEST SIDE SELECTOR (for I2V & R2V modes, matching Screenshots 1, 2, 3) ──
       const longestSideBox = mk("div", {
@@ -1079,8 +1088,7 @@ app.registerExtension({
       };
       renderShapeChips();
       longestSideBox.appendChild(shapeChipsRow);
-
-      leftCol.appendChild(longestSideBox);
+      leftScrollArea.appendChild(longestSideBox);
 
       // CFG Scale & FPS Row (2 Columns: CFG SCALE on left, FPS on right)
       const cfgFpsRow = mk("div", { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" });
@@ -1108,8 +1116,7 @@ app.registerExtension({
       });
       cfgInput.oninput = () => { S.cfg = parseFloat(cfgInput.value) || 1.0; persist(); };
       cfgBox.appendChild(cfgInput);
-      cfgFpsRow.appendChild(cfgBox);
-
+      
       // FPS Custom Dropdown (Matching xFlow Style 1:1)
       const fpsBox = mk("div", {
         background: C.bg2,
@@ -1236,8 +1243,8 @@ app.registerExtension({
       });
 
       fpsBox.append(fpsTrigger, fpsMenu);
-      cfgFpsRow.appendChild(fpsBox);
-      leftCol.appendChild(cfgFpsRow);
+      cfgFpsRow.append(cfgBox, fpsBox);
+      leftScrollArea.appendChild(cfgFpsRow);
 
       // Duration Box with Custom Visual Interactive Drag Slider (1-10s, default 4s, Full Width)
       const durBox = mk("div", {
@@ -1378,7 +1385,7 @@ app.registerExtension({
       };
 
       durBox.append(sliderTrackContainer, durInfoLbl);
-      leftCol.appendChild(durBox);
+      leftScrollArea.appendChild(durBox);
 
       // SEED Control Box (Matching Screenshot 2 1:1 with xFlow Neon Green Shuffle Button)
       const seedBox = mk("div", {
@@ -1506,7 +1513,7 @@ app.registerExtension({
 
       seedCtrlRow.append(minusBtn, seedInputEl, randomizerBtn, plusBtn);
       seedBox.appendChild(seedCtrlRow);
-      leftCol.appendChild(seedBox);
+      leftScrollArea.appendChild(seedBox);
 
       // ── MEDIA INPUT SLOT CARD (Dynamic for I2V & R2V modes) ──
       const slotCard = mk("div", {
@@ -1524,7 +1531,7 @@ app.registerExtension({
       let imgData2 = null;
       let audioData = null;
 
-      // SPEAK vs SING Audio Sync Mode Pill Switch Bar for R2V mode
+      // Audio Sync Mode Pill Switch Bar for R2V mode (NONE, SPEAK, SING)
       const r2vSwitchRow = mk("div", {
         display: "none",
         alignItems: "center",
@@ -1538,38 +1545,40 @@ app.registerExtension({
         marginBottom: "2px",
       });
 
-      const speakBtn = mk("button", {
-        flex: "1", padding: "4px 0", fontSize: "11px", fontWeight: "800",
+      const noneBtn = mk("button", {
+        flex: "1", padding: "4px 0", fontSize: "10px", fontWeight: "800",
         borderRadius: "4px", border: "none", cursor: "pointer", transition: "all 0.15s ease",
         background: LIME, color: "#111"
+      }, { textContent: "NONE" });
+
+      const speakBtn = mk("button", {
+        flex: "1", padding: "4px 0", fontSize: "10px", fontWeight: "800",
+        borderRadius: "4px", border: "none", cursor: "pointer", transition: "all 0.15s ease",
+        background: "transparent", color: C.text
       }, { textContent: "🗣 SPEAK" });
 
       const singBtn = mk("button", {
-        flex: "1", padding: "4px 0", fontSize: "11px", fontWeight: "800",
+        flex: "1", padding: "4px 0", fontSize: "10px", fontWeight: "800",
         borderRadius: "4px", border: "none", cursor: "pointer", transition: "all 0.15s ease",
         background: "transparent", color: C.text
       }, { textContent: "🎵 SING" });
 
       const updateR2vSwitch = (type) => {
-        S.r2v_type = type;
+        S.r2v_type = type || "NONE";
         persist();
-        if (type === "SPEAK") {
-          speakBtn.style.background = LIME;
-          speakBtn.style.color = "#111";
-          singBtn.style.background = "transparent";
-          singBtn.style.color = C.text;
-        } else {
-          singBtn.style.background = LIME;
-          singBtn.style.color = "#111";
-          speakBtn.style.background = "transparent";
-          speakBtn.style.color = C.text;
-        }
+        [noneBtn, speakBtn, singBtn].forEach((btn, idx) => {
+          const modeVal = ["NONE", "SPEAK", "SING"][idx];
+          const isActive = S.r2v_type === modeVal;
+          btn.style.background = isActive ? LIME : "transparent";
+          btn.style.color = isActive ? "#111" : C.text;
+        });
       };
 
+      noneBtn.onclick = (e) => { e.stopPropagation(); updateR2vSwitch("NONE"); };
       speakBtn.onclick = (e) => { e.stopPropagation(); updateR2vSwitch("SPEAK"); };
       singBtn.onclick = (e) => { e.stopPropagation(); updateR2vSwitch("SING"); };
 
-      r2vSwitchRow.append(speakBtn, singBtn);
+      r2vSwitchRow.append(noneBtn, speakBtn, singBtn);
       slotCard.appendChild(r2vSwitchRow);
 
       const createImgUploadBox = (headerNode, slotKey) => {
@@ -1824,7 +1833,7 @@ app.registerExtension({
 
       slotGrid.append(box1, box2Img, box2Audio);
       slotCard.appendChild(slotGrid);
-      leftCol.appendChild(slotCard);
+      leftScrollArea.appendChild(slotCard);
 
       // BIG GREEN GENERATE BUTTON with Sparkle Vector Icon
       const genBtnGroup = mk("div", { display: "flex", gap: "8px", marginTop: "auto" });
@@ -2943,7 +2952,7 @@ app.registerExtension({
           longestSideBox.style.display = "flex";
           slotCard.style.display = "flex";
           r2vSwitchRow.style.display = "flex";
-          updateR2vSwitch(S.r2v_type || "SPEAK");
+          updateR2vSwitch(S.r2v_type || "NONE");
           box1HeaderLbl.textContent = "REF IMAGE";
           box2Img.style.display = "none";
           box2Audio.style.display = "flex";
