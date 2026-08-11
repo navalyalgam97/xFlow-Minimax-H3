@@ -62,7 +62,20 @@ All required models can be managed and downloaded automatically via the built-in
 
 ## 📜 Changelog
 
-### Version 1.7.0 (Latest Release)
+### Version 1.8.0 (Latest Release)
+
+> Bug-fix release. Before this, **R2V (Reference + Audio) and I2V never used your reference image or audio** — both silently ran the text-to-video workflow. If you are on 1.7.0 or earlier, upgrade.
+
+- 🎯 **Correct Workflow Per Mode** *(root cause)*: `R2V` and `I2V` resolved to workflow names the dispatcher did not recognise, falling through to `text_to_video` — a graph with no `PixaromaLoadImageMini` and no `PixaromaLoadAudio`. The reference nodes were never submitted, so the model generated from the prompt alone. Unknown modes now throw instead of defaulting.
+- 📦 **Pixaroma State Serialization**: Hidden `*State` inputs are JSON **strings**, not objects. Sending objects made `PixaromaLoadAudio` fail with *"no usable sound file selected"* while duration coincidentally still worked.
+- 📐 **Longest Side Panel**: `SIZE TABS` / `SHAPE CHIPS` now curate which chips show on the node face (Pixaroma behaviour) instead of silently overwriting the chosen size and ratio — the reason 864/keep jobs came out 1024×1024. Adds **UPSCALING** and wires up **ROUND SIZES TO**.
+- 💾 **Auto-Save Works**: **On** → `output/MinimaxH3/`, listed in the Gallery tab with a metadata sidecar. **Off** → `temp/`, cleared on restart. Previously the toggle did nothing and saved videos could never reach the Gallery.
+- ▶️ **Player Controls & Replay**: Video elements had `controls` / `src` passed as CSS and silently dropped — no transport bar, and Gallery thumbnails had no source.
+- 🔄 **Reliable Completion**: Completion is polled from `/history` as well as the websocket, so the node no longer sticks on *"Generating…"*; events are matched to the node's own `prompt_id` so another tab's run cannot drive its status.
+- 🧩 **No Silent Model Substitution**: An unresolvable model name is no longer replaced with an arbitrary one (which had been assigning `pixel_space` to both VAEs).
+- 💥 **`NameError` Fix**: `_last_output_by_node` was never defined, so executing the node raised before returning its outputs.
+
+### Version 1.7.0
 
 - 📖 **Embedded Inline Help Panel**: Step-by-step user guides for **T2V**, **I2V (FFLF)**, **R2V (SPEAK / SING)**, and **Advanced Options**.
 - 🙏 **Pixaroma Credits & Thanks**: Dedicated acknowledgements section for Pixaroma open-source workflows.

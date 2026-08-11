@@ -2,6 +2,43 @@
 
 All notable changes to the **xFlowOne · Minimax H3** single-node video interface for ComfyUI.
 
+## [1.8.0] - 2026-08-11
+
+### 🐛 Reference & Audio Generation Repaired, Gallery Auto-Save, Player Controls
+
+This release fixes a set of defects that between them meant **R2V (Reference + Audio) and I2V never actually used your reference image or audio**. Every generation in those modes silently ran the text-to-video workflow instead.
+
+- **🎯 Correct Workflow Per Mode** *(the root cause)*:
+  - The Generate handler resolves the mode pill into a workflow name (`R2V` → `reference_to_video`), but `executePixaromaWorkflow` still tested for the raw pill ids (`"R2V"`, `"I2V"`). The resolved names matched no branch and fell through to `text_to_video` — a workflow that contains **no** `PixaromaLoadImageMini` and **no** `PixaromaLoadAudio`. The reference nodes were never in the submitted graph, so the model generated a stranger from the prompt alone.
+  - Replaced the ternary chain with an explicit mode map covering both spellings. An unrecognised mode now **throws** instead of silently defaulting to `text_to_video`.
+  - Only the `_fflf` and `_sing` paths were ever unaffected, because their resolved names happened to equal the strings being tested.
+- **📦 Pixaroma State Serialization**:
+  - Pixaroma nodes keep their real configuration in `node.properties.<xxx>State` as **hidden STRING inputs holding JSON**, injected by the frontend at `graphToPrompt` time — a path this node bypasses by posting to `/prompt` directly. States were being sent as nested objects.
+  - `_longest_side_helpers.parse_state` and `_duration_helpers.parse_state` accept a dict, so duration appeared to work, but `node_load_audio._state` uses a bare `json.loads()` that raises `TypeError` on a dict and degrades to `{}` → *"no usable sound file selected"*.
+  - States are now `JSON.stringify`'d with UI-only keys stripped, matching Pixaroma's own `strip_ui_keys`.
+- **📐 Longest Side Settings Panel**:
+  - `SIZE TABS` and `SHAPE CHIPS` in the settings overlay were wired to `S.longest_side` / `S.aspect_ratio`. In Pixaroma those rows choose **which chips appear on the node face** — so curating the row silently changed the output resolution. Selecting `1024` and `1:1` there turned an 864/keep portrait job into a 1024×1024 square one.
+  - They now toggle list membership (max 5, never empty); the selection follows when its chip is removed; off-row persisted state is repaired on load.
+  - Adds the **UPSCALING** toggle and routes `ROUND SIZES TO` (`step_round`) through — both change real output dimensions.
+- **💾 Auto-Save Toggle Now Functional**:
+  - The toggle only flipped a persisted boolean; nothing read it. Separately, the Gallery lists `output/MinimaxH3` while `PixaromaSaveMp4` always wrote to the output **root**, so saved videos could never appear there.
+  - **On** → `output/MinimaxH3/` with `save_mode=save`, visible in the Gallery tab. **Off** → `temp/`, cleared on restart.
+  - Completion writes the metadata sidecar (prompt, mode, size, duration, fps, seed) that Gallery cards read back.
+- **▶️ Video Player Controls**:
+  - `mk(tag, css, props)` assigns its second argument to `element.style`, so both video elements passed `controls` / `autoplay` / `loop` / `muted` — and, in Gallery cards, `src` — as CSS properties. They were silently dropped: no transport bar, no replay, and Gallery thumbnails had no source at all.
+- **🔄 Reliable Completion Handling**:
+  - The generate button and in-node player were driven solely by the `executed` websocket event, which can be missed on reconnect — leaving the node stuck on *"Generating…"* with no recovery.
+  - Completion is now also polled from `/history` for the node's own `prompt_id`; whichever path arrives first finishes the run, plays the video, or surfaces the real execution error.
+  - Execution events are matched against the node's own `prompt_id`, so a run queued from another tab no longer drives this node's status — previously a failed job here could look like somebody else's success.
+- **🧩 Model Resolution No Longer Guesses**:
+  - `resolveModelName` fell back to `choices[0]` when a name did not match, silently assigning `pixel_space` to **both** the video and audio VAE and producing a plausible-but-wrong video. It now keeps the requested name so ComfyUI rejects the prompt with a clear error, and logs what is installed.
+- **💥 `NameError` on Node Execution**:
+  - `_last_output_by_node` was written by `generate_video` and by `/minimax_h3/set_output` but **never defined**, so executing `MinimaxH3OneVideoNode` died with `NameError` before returning its `VIDEO` and `metadata_json` outputs.
+- **🔍 Diagnostics**:
+  - Submitted payloads are logged to the browser console and mirrored to `last_payload.json` next to the node via `/minimax_h3/debug_payload`, so a remote install can be diagnosed from a terminal.
+
+---
+
 ## [1.7.0] - 2026-08-10
 
 ### 🚀 Embedded Inline Drawers, Pixaroma Credits & Community Social Hub
