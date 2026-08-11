@@ -656,8 +656,12 @@ async function resolveModelName(classType, inputName, rawPreferred) {
         const baseMatch = choices.find(c => String(c).replace(/\\/g, "/").toLowerCase().endsWith(basePreferred));
         if (baseMatch) return baseMatch;
 
-        // 3. Fallback to first choice
-        if (choices[0]) return choices[0];
+        // No match: return the requested name so ComfyUI rejects the prompt with
+        // a clear "value not in list" error. Falling back to choices[0] used to
+        // substitute an arbitrary model - e.g. both VAE loaders silently became
+        // "pixel_space" - which generates a plausible but wrong video instead of
+        // failing.
+        console.warn(`[MinimaxH3] ${classType}.${inputName}: "${normPreferred}" not installed. Available:`, choices);
       }
     }
   } catch (e) {
@@ -698,6 +702,7 @@ function patchPixaromaState(stateKey, state, params) {
 
     case "longestSideState":
       state.size = parseInt(num(params.longest_side, state.size ?? 864));
+      state.step = parseInt(num(params.step_round, state.step ?? 32));
       if (params.aspect_ratio) state.ratio = params.aspect_ratio;
       if (params.crop_from) state.anchor = params.crop_from;
       if (typeof params.upscale_small === "boolean") state.allow_upscale = params.upscale_small;
@@ -732,20 +737,39 @@ function patchPixaromaState(stateKey, state, params) {
   return state;
 }
 
-// Assign a state object under every key spelling the backend might expect:
-// the property name itself, its capitalized variant, and any required input
-// whose name matches case-insensitively. Extra keys are ignored by validation.
-function assignState(inputs, stateKey, state, nodeDef) {
-  const capKey = stateKey.charAt(0).toUpperCase() + stateKey.slice(1);
-  inputs[stateKey] = state;
-  inputs[capKey] = state;
+// Cosmetic keys that let the node face draw itself. Pixaroma's strip_ui_keys
+// keeps them out of the injected state: a change to one would otherwise
+// invalidate ComfyUI's cache and re-run the node for nothing.
+const UI_ONLY_STATE_KEYS = ["sizes", "ratios", "values"];
 
-  const required = nodeDef && nodeDef.input && nodeDef.input.required;
-  if (required) {
-    Object.keys(required).forEach(k => {
-      if (k.toLowerCase() === stateKey.toLowerCase()) inputs[k] = state;
+// Assign a state under every key spelling the backend might expect: the
+// property name, its PascalCase variant, and any declared input matching
+// case-insensitively. Extra keys are ignored by validation.
+//
+// The value MUST be a JSON *string*, not an object. These are `hidden` STRING
+// inputs that the Pixaroma frontend injects at graphToPrompt time - a path we
+// bypass entirely by POSTing to /prompt ourselves. PixaromaLoadAudio parses it
+// with a bare json.loads(), which raises TypeError on a dict and silently
+// degrades to {} -> "no usable sound file selected".
+function assignState(inputs, stateKey, state, nodeDef) {
+  const clean = {};
+  Object.keys(state).forEach(k => {
+    if (!UI_ONLY_STATE_KEYS.includes(k)) clean[k] = state[k];
+  });
+  const serialized = JSON.stringify(clean);
+
+  const capKey = stateKey.charAt(0).toUpperCase() + stateKey.slice(1);
+  inputs[stateKey] = serialized;
+  inputs[capKey] = serialized;
+
+  const declared = nodeDef && nodeDef.input;
+  ["required", "optional", "hidden"].forEach(section => {
+    const keys = declared && declared[section];
+    if (!keys) return;
+    Object.keys(keys).forEach(k => {
+      if (k.toLowerCase() === stateKey.toLowerCase()) inputs[k] = serialized;
     });
-  }
+  });
 }
 
 async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInner) {
@@ -877,6 +901,18 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
     promptPayload[nodeId] = { class_type: classType, inputs: inputs };
   }
 
+  // Diagnostic: the exact state each Pixaroma node will run with. We build the
+  // payload by hand instead of going through graphToPrompt, so this is the only
+  // place the real values are visible.
+  console.log("[MinimaxH3] Submitting payload:", JSON.parse(JSON.stringify(promptPayload)));
+  Object.entries(promptPayload).forEach(([nid, n]) => {
+    Object.entries(n.inputs).forEach(([k, v]) => {
+      if (/state$/i.test(k) && typeof v === "string") {
+        console.log(`[MinimaxH3]   node ${nid} ${n.class_type}.${k} = ${v}`);
+      }
+    });
+  });
+
   const response = await api.fetchApi("/prompt", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -966,6 +1002,15 @@ app.registerExtension({
           const parsed = JSON.parse(saved);
           if (parsed.cfg === 7.5 || !parsed.cfg) parsed.cfg = 1.0;
           Object.assign(S, parsed);
+          // The settings overlay used to write the selection instead of the
+          // chip list, so a persisted size/ratio may be one the user only meant
+          // to add to the row. Pull anything off-row back onto it.
+          if (Array.isArray(S.active_size_tabs) && !S.active_size_tabs.includes(S.longest_side)) {
+            S.longest_side = S.active_size_tabs[0];
+          }
+          if (Array.isArray(S.active_shape_chips) && !S.active_shape_chips.includes(S.aspect_ratio)) {
+            S.aspect_ratio = S.active_shape_chips[0];
+          }
         }
       } catch (e) {}
 
@@ -3556,19 +3601,38 @@ app.registerExtension({
         sec2Hdr.appendChild(resetSizesBtn);
         sec2.appendChild(sec2Hdr);
 
+        // These buttons pick which sizes appear on the node face - they are NOT
+        // the chosen size. Selecting here used to overwrite S.longest_side, so
+        // curating the row silently changed the generated resolution.
+        const ALL_SIZE_TABS = [864, 1024, 1216, 1344, 1536, 1728, 1920, 2048];
+        const MAX_ROW = 5;
         const sizeTabsGrid = mk("div", { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px" });
-        [864, 1024, 1216, 1344, 1536].forEach(sizeVal => {
-          const isSelected = S.longest_side === sizeVal;
+        ALL_SIZE_TABS.forEach(sizeVal => {
+          const active = (S.active_size_tabs || []).includes(sizeVal);
           const btn = mk("button", {
             padding: "8px", fontSize: "12px", fontWeight: "800", borderRadius: "6px",
-            border: `1px solid ${isSelected ? LIME : C.border}`, background: isSelected ? LIME : C.bg2,
-            color: isSelected ? "#111" : C.text, cursor: "pointer", transition: "all 0.12s ease"
+            border: `1px solid ${active ? LIME : C.border}`, background: active ? LIME : C.bg2,
+            color: active ? "#111" : C.text, cursor: "pointer", transition: "all 0.12s ease"
           }, { textContent: String(sizeVal) });
 
           btn.onclick = (e) => {
             e.stopPropagation();
-            S.longest_side = sizeVal;
-            lsTitleLbl.textContent = `${sizeVal} long side`;
+            const list = (S.active_size_tabs || []).slice();
+            const at = list.indexOf(sizeVal);
+            if (at >= 0) {
+              if (list.length <= 1) return;      // never empty the row
+              list.splice(at, 1);
+            } else {
+              if (list.length >= MAX_ROW) return; // row is full
+              list.push(sizeVal);
+              list.sort((a, b) => a - b);
+            }
+            S.active_size_tabs = list;
+            // Keep the chosen size on the row, otherwise nothing looks selected.
+            if (!list.includes(S.longest_side)) {
+              S.longest_side = list[0];
+              lsTitleLbl.textContent = `${list[0]} long side`;
+            }
             persist();
             renderLsTabs();
             renderLongestSideOverlay();
@@ -3577,29 +3641,57 @@ app.registerExtension({
         });
         sec2.appendChild(sizeTabsGrid);
         sec2.appendChild(mk("div", { fontSize: "10px", color: C.muted, marginTop: "2px" }, {
-          textContent: "Type any size. Up to 5 fit on the row, and each is rounded to the nearest 32 to match the step above."
+          textContent: (S.active_size_tabs || []).length >= MAX_ROW
+            ? "The row is full. Click one that is on to take it off, then add another."
+            : "Pick up to 5 to show on the node. Choose the size itself on the node row."
         }));
         overlayBodyContainer.appendChild(sec2);
 
         // Section 3: SHAPE CHIPS (Aspect Ratios)
         const sec3 = mk("div", { display: "flex", flexDirection: "column", gap: "4px", marginBottom: "12px" });
-        sec3.appendChild(cap("SHAPE CHIPS"));
+        const sec3Hdr = mk("div", { display: "flex", justifyContent: "space-between", alignItems: "center" });
+        sec3Hdr.appendChild(cap("SHAPE CHIPS"));
+        const resetChipsBtn = mk("button", { background: "transparent", border: "none", color: C.muted, fontSize: "10px", fontWeight: "700", cursor: "pointer" }, { textContent: "reset" });
+        resetChipsBtn.onclick = (e) => {
+          e.stopPropagation();
+          S.active_shape_chips = ["keep", "1:1", "16:9", "9:16", "2:3"];
+          if (!S.active_shape_chips.includes(S.aspect_ratio)) S.aspect_ratio = "keep";
+          persist();
+          renderShapeChips();
+          renderLongestSideOverlay();
+        };
+        sec3Hdr.appendChild(resetChipsBtn);
+        sec3.appendChild(sec3Hdr);
+
+        // Same as SIZE TABS: this picks which shapes appear on the node face,
+        // it does not choose the ratio. Clicking here used to set S.aspect_ratio,
+        // which is how a "keep" workflow ended up cropping to 1:1.
         const shapeGrid = mk("div", { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "6px" });
         ["keep", "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "5:4", "4:5", "21:9", "9:21", "2:1", "1:2"].forEach(chip => {
-          const isSelected = S.aspect_ratio === chip;
+          const active = (S.active_shape_chips || []).includes(chip);
           const btn = mk("button", {
             padding: "6px 2px", fontSize: "10px", fontWeight: "700", borderRadius: "4px",
-            border: `1px solid ${isSelected ? LIME : C.border}`, background: isSelected ? LIME : C.bg2,
-            color: isSelected ? "#111" : C.text, cursor: "pointer", textAlign: "center",
+            border: `1px solid ${active ? LIME : C.border}`, background: active ? LIME : C.bg2,
+            color: active ? "#111" : C.text, cursor: "pointer", textAlign: "center",
             display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "4px"
           });
 
-          const chipIcon = createAspectIcon(chip, isSelected);
+          const chipIcon = createAspectIcon(chip, active);
           btn.append(chipIcon, document.createTextNode(chip));
 
           btn.onclick = (e) => {
             e.stopPropagation();
-            S.aspect_ratio = chip;
+            const list = (S.active_shape_chips || []).slice();
+            const at = list.indexOf(chip);
+            if (at >= 0) {
+              if (list.length <= 1) return;
+              list.splice(at, 1);
+            } else {
+              if (list.length >= MAX_ROW) return;
+              list.push(chip);
+            }
+            S.active_shape_chips = list;
+            if (!list.includes(S.aspect_ratio)) S.aspect_ratio = list[0];
             persist();
             renderShapeChips();
             renderLongestSideOverlay();
@@ -3607,7 +3699,33 @@ app.registerExtension({
           shapeGrid.appendChild(btn);
         });
         sec3.appendChild(shapeGrid);
+        sec3.appendChild(mk("div", { fontSize: "10px", color: C.muted, marginTop: "2px" }, {
+          textContent: (S.active_shape_chips || []).length >= MAX_ROW
+            ? "The row is full. Click one that is on to take it off, then add another."
+            : "Pick up to 5 to show on the node. Choose the shape itself on the node row."
+        }));
         overlayBodyContainer.appendChild(sec3);
+
+        // Section 3b: UPSCALING (Pixaroma parity - affects the real output size)
+        const sec3b = mk("div", { display: "flex", flexDirection: "column", gap: "4px", marginBottom: "12px" });
+        sec3b.appendChild(cap("UPSCALING"));
+        const upRow = mk("div", { display: "flex", gap: "8px", alignItems: "center", cursor: "pointer" });
+        const upBox = mk("div", {
+          width: "16px", height: "16px", borderRadius: "3px", flexShrink: "0",
+          border: `1px solid ${S.upscale_small ? LIME : C.border}`,
+          background: S.upscale_small ? LIME : C.bg2,
+        });
+        upRow.append(upBox, mk("div", { fontSize: "11px", color: C.text }, {
+          textContent: "Let small pictures grow to the size above."
+        }));
+        upRow.onclick = (e) => {
+          e.stopPropagation();
+          S.upscale_small = !S.upscale_small;
+          persist();
+          renderLongestSideOverlay();
+        };
+        sec3b.appendChild(upRow);
+        overlayBodyContainer.appendChild(sec3b);
 
         // Section 4: CROP FROM (3x3 Grid)
         const sec4 = mk("div", { display: "flex", flexDirection: "column", gap: "4px", marginBottom: "12px" });
@@ -4294,6 +4412,7 @@ app.registerExtension({
             height: S.height,
             longest_side: S.longest_side,
             aspect_ratio: S.aspect_ratio,
+            step_round: S.step_round,
             crop_from: S.crop_from,
             upscale_small: S.upscale_small,
             resample_mode: S.resample_mode,
