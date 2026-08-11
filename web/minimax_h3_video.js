@@ -694,6 +694,7 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
   const workflowJson = await res.json();
   if (!workflowJson || !workflowJson.nodes) throw new Error(`Failed to load workflow template for mode: ${mode}`);
 
+  const allObjInfo = await fetchAllObjectInfo();
   const promptPayload = {};
 
   for (const node of workflowJson.nodes) {
@@ -702,20 +703,36 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
     const inputs = {};
     const wv = node.widgets_values || [];
 
-    // 1. Explicit clean parameter mapping based on node class type
+    // 1. Pre-fill required non-link widget inputs from /object_info
+    const nodeDef = allObjInfo[classType];
+    if (nodeDef && nodeDef.input && nodeDef.input.required) {
+      const reqKeys = Object.keys(nodeDef.input.required);
+      let widgetIdx = 0;
+      reqKeys.forEach(key => {
+        const isLinked = node.inputs && node.inputs.some(i => i.name === key && i.link != null);
+        if (!isLinked) {
+          if (widgetIdx < wv.length) {
+            inputs[key] = wv[widgetIdx];
+          }
+          widgetIdx++;
+        }
+      });
+    }
+
+    // 2. Specific parameter overrides & dynamic model resolutions
     if (classType === "CLIPLoader") {
-      const raw = wv[0] || "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors";
+      const raw = inputs["clip_name"] || wv[0] || "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors";
       inputs["clip_name"] = await resolveModelName("CLIPLoader", "clip_name", raw);
-      inputs["type"] = wv[1] || "minimax";
-      inputs["device"] = wv[2] || "default";
+      if (!inputs["type"]) inputs["type"] = wv[1] || "minimax";
+      if (!inputs["device"]) inputs["device"] = "default";
     } else if (classType === "VAELoader") {
-      const raw = wv[0] || "minimax_h3_video_vae_fp16.safetensors";
+      const raw = inputs["vae_name"] || wv[0] || "minimax_h3_video_vae_fp16.safetensors";
       inputs["vae_name"] = await resolveModelName("VAELoader", "vae_name", raw);
     } else if (classType === "UNETLoader") {
       const fallback = (mode.includes("reference") || mode === "R2V" ? "h3/minimax_h3_ref2va_pruned_int8_convrot.safetensors" : "h3/minimax_h3_fl2va_pruned_int8_convrot.safetensors");
-      const raw = wv[0] || fallback;
+      const raw = inputs["unet_name"] || wv[0] || fallback;
       inputs["unet_name"] = await resolveModelName("UNETLoader", "unet_name", raw);
-      inputs["weight_dtype"] = wv[1] || "default";
+      if (!inputs["weight_dtype"]) inputs["weight_dtype"] = "default";
     } else if (classType === "PixaromaPrompt") {
       inputs["text"] = params.prompt || "";
     } else if (classType === "PixaromaSizes") {
@@ -758,7 +775,7 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
       inputs["text"] = wv[0] || "";
     }
 
-    // 2. Connect linked inputs
+    // 3. Connect linked inputs (overrides widget values if linked)
     if (node.inputs && Array.isArray(node.inputs)) {
       node.inputs.forEach(inp => {
         if (inp.link != null) {
