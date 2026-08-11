@@ -694,56 +694,32 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
   const workflowJson = await res.json();
   if (!workflowJson || !workflowJson.nodes) throw new Error(`Failed to load workflow template for mode: ${mode}`);
 
-  const allObjInfo = await fetchAllObjectInfo();
   const promptPayload = {};
 
   for (const node of workflowJson.nodes) {
     const nodeId = String(node.id);
     const classType = node.type;
     const inputs = {};
+    const wv = node.widgets_values || [];
 
-    // 1. Auto-map widget values to parameter names from /object_info
-    const nodeDef = allObjInfo[classType];
-    const reqInputs = (nodeDef && nodeDef.input && nodeDef.input.required) ? Object.keys(nodeDef.input.required) : [];
-    const optInputs = (nodeDef && nodeDef.input && nodeDef.input.optional) ? Object.keys(nodeDef.input.optional) : [];
-    
-    const connectedLinkNames = new Set((node.inputs || []).filter(i => i.link != null).map(i => i.name));
-
-    let widgetParamNames = [];
-    reqInputs.forEach(name => {
-      if (!connectedLinkNames.has(name)) widgetParamNames.push(name);
-    });
-    optInputs.forEach(name => {
-      if (!connectedLinkNames.has(name)) widgetParamNames.push(name);
-    });
-
-    if (node.widgets_values && Array.isArray(node.widgets_values)) {
-      node.widgets_values.forEach((val, idx) => {
-        if (idx < widgetParamNames.length) {
-          const paramName = widgetParamNames[idx];
-          inputs[paramName] = val;
-        }
-      });
-    }
-
-    // 2. Specific parameter overrides & dynamic model resolutions
+    // 1. Explicit clean parameter mapping based on node class type
     if (classType === "CLIPLoader") {
-      const raw = inputs["clip_name"] || (node.widgets_values && node.widgets_values[0]) || "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors";
+      const raw = wv[0] || "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors";
       inputs["clip_name"] = await resolveModelName("CLIPLoader", "clip_name", raw);
-      if (!inputs["type"]) inputs["type"] = (node.widgets_values && node.widgets_values[1]) || "minimax";
-      if (!inputs["device"]) inputs["device"] = "default";
+      inputs["type"] = wv[1] || "minimax";
+      inputs["device"] = wv[2] || "default";
     } else if (classType === "VAELoader") {
-      const raw = inputs["vae_name"] || (node.widgets_values && node.widgets_values[0]) || "minimax_h3_video_vae_fp16.safetensors";
+      const raw = wv[0] || "minimax_h3_video_vae_fp16.safetensors";
       inputs["vae_name"] = await resolveModelName("VAELoader", "vae_name", raw);
     } else if (classType === "UNETLoader") {
       const fallback = (mode.includes("reference") || mode === "R2V" ? "h3/minimax_h3_ref2va_pruned_int8_convrot.safetensors" : "h3/minimax_h3_fl2va_pruned_int8_convrot.safetensors");
-      const raw = inputs["unet_name"] || (node.widgets_values && node.widgets_values[0]) || fallback;
+      const raw = wv[0] || fallback;
       inputs["unet_name"] = await resolveModelName("UNETLoader", "unet_name", raw);
-      if (!inputs["weight_dtype"]) inputs["weight_dtype"] = "default";
+      inputs["weight_dtype"] = wv[1] || "default";
     } else if (classType === "PixaromaPrompt") {
-      inputs["text"] = params.prompt;
+      inputs["text"] = params.prompt || "";
     } else if (classType === "PixaromaSizes") {
-      const sizesStateVal = (node.widgets_values && node.widgets_values[0]) ? JSON.parse(JSON.stringify(node.widgets_values[0])) : { version: 1, sizes: [] };
+      const sizesStateVal = wv[0] ? JSON.parse(JSON.stringify(wv[0])) : { version: 1, sizes: [] };
       if (typeof sizesStateVal === "object" && sizesStateVal !== null) {
         sizesStateVal.w = parseInt(params.width || 864);
         sizesStateVal.h = parseInt(params.height || 480);
@@ -751,34 +727,38 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
       inputs["sizesState"] = sizesStateVal;
       inputs["SizesState"] = sizesStateVal;
     } else if (classType === "PixaromaDuration") {
-      inputs["duration"] = parseInt(params.duration);
+      inputs["duration"] = parseInt(params.duration || 4);
     } else if (classType === "PixaromaSaveMp4") {
-      inputs["fps"] = parseInt(params.fps);
+      inputs["fps"] = parseInt(params.fps || 24);
       inputs["filename_prefix"] = `MinimaxH3_${mode}`;
     } else if (classType === "KSampler") {
       inputs["seed"] = params.seed === 0 ? Math.floor(Math.random() * 1000000000) : parseInt(params.seed);
-      inputs["steps"] = 20;
-      inputs["cfg"] = parseFloat(params.cfg);
-      inputs["sampler_name"] = "euler";
-      inputs["scheduler"] = "normal";
-      inputs["denoise"] = 1.0;
+      inputs["control_after_generate"] = wv[1] || "randomize";
+      inputs["steps"] = parseInt(wv[2] || 20);
+      inputs["cfg"] = parseFloat(params.cfg || 1.0);
+      inputs["sampler_name"] = wv[4] || "euler";
+      inputs["scheduler"] = wv[5] || "normal";
+      inputs["denoise"] = parseFloat(wv[6] || 1.0);
     } else if (classType === "MiniMaxH3ImageToVideo" || classType === "MiniMaxH3ReferenceToVideo") {
-      inputs["prompt"] = params.prompt;
+      inputs["prompt"] = params.prompt || "";
       inputs["motion_strength"] = parseFloat(params.motion_strength || 0.5);
       if (params.width) inputs["width"] = parseInt(params.width);
       if (params.height) inputs["height"] = parseInt(params.height);
+      if (wv[4]) inputs["match_mode"] = wv[4];
     } else if (classType === "PixaromaLoadImageMini") {
       const title = node.title || "";
       if (title.includes("Last Frame") || title.includes("2.")) {
-        inputs["image"] = params.image_name_2 || params.image_name_1 || (node.widgets_values && node.widgets_values[0]) || "";
+        inputs["image"] = params.image_name_2 || params.image_name_1 || wv[0] || "";
       } else {
-        inputs["image"] = params.image_name_1 || (node.widgets_values && node.widgets_values[0]) || "";
+        inputs["image"] = params.image_name_1 || wv[0] || "";
       }
     } else if (classType === "PixaromaLoadAudio") {
-      inputs["audio"] = params.audio_name || (node.widgets_values && node.widgets_values[0]) || "";
+      inputs["audio"] = params.audio_name || wv[0] || "";
+    } else if (classType === "PixaromaLabel" || classType === "PixaromaNote") {
+      inputs["text"] = wv[0] || "";
     }
 
-    // 3. Connect linked inputs
+    // 2. Connect linked inputs
     if (node.inputs && Array.isArray(node.inputs)) {
       node.inputs.forEach(inp => {
         if (inp.link != null) {
@@ -4219,33 +4199,46 @@ app.registerExtension({
         }
       };
 
+      const handleExecutionError = (e) => {
+        genBtn.disabled = false;
+        genBtn.innerHTML = "";
+        genBtn.appendChild(svgIcon("play", 16, "#111"));
+        genBtn.appendChild(document.createTextNode("Generate"));
+
+        statusRow.style.display = "flex";
+        let detailMsg = "Execution failed";
+        let nodeType = "";
+        if (e && e.detail) {
+          detailMsg = e.detail.exception_message || e.detail.message || e.detail.error || (typeof e.detail === "string" ? e.detail : JSON.stringify(e.detail));
+          if (e.detail.node_type) nodeType = ` [${e.detail.node_type}]`;
+        }
+        tx(statusLabel, `Error${nodeType}: ${detailMsg}`);
+        statusLabel.style.color = C.err;
+      };
+
       api.addEventListener("execution_start", (e) => {
         statusRow.style.display = "flex";
         tx(statusLabel, "Executing workflow...");
+        statusLabel.style.color = C.text;
         progressBarInner.style.width = "20%";
       });
 
-      api.addEventListener("execution_error", (e) => {
-        genBtn.disabled = false;
-        genBtn.innerHTML = "";
-        genBtn.appendChild(svgIcon("play", 16, "#111"));
-        genBtn.appendChild(document.createTextNode("Generate"));
+      api.addEventListener("execution_error", handleExecutionError);
+      api.addEventListener("exec_error", handleExecutionError);
+      api.addEventListener("execution_interrupted", handleExecutionError);
 
-        const detailMsg = e.detail && e.detail.exception_message ? e.detail.exception_message : "Execution failed";
-        const nodeType = e.detail && e.detail.node_type ? ` [${e.detail.node_type}]` : "";
-        tx(statusLabel, `Error${nodeType}: ${detailMsg}`);
-        statusLabel.style.color = C.err;
-      });
-
-      api.addEventListener("execution_interrupted", () => {
-        genBtn.disabled = false;
-        genBtn.innerHTML = "";
-        genBtn.appendChild(svgIcon("play", 16, "#111"));
-        genBtn.appendChild(document.createTextNode("Generate"));
-
-        tx(statusLabel, "Execution Interrupted");
-        statusLabel.style.color = C.err;
-      });
+      if (api.socket) {
+        try {
+          api.socket.addEventListener("message", (event) => {
+            try {
+              const msg = JSON.parse(event.data);
+              if (msg.type === "execution_error" || msg.type === "exec_error") {
+                handleExecutionError({ detail: msg.data });
+              }
+            } catch (err) {}
+          });
+        } catch (err) {}
+      }
 
       api.addEventListener("progress", (e) => {
         if (e.detail && e.detail.max) {
