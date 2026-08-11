@@ -764,13 +764,27 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
       if (wv[4]) inputs["match_mode"] = wv[4];
     } else if (classType === "PixaromaLoadImageMini") {
       const title = node.title || "";
-      if (title.includes("Last Frame") || title.includes("2.")) {
-        inputs["image"] = params.image_name_2 || params.image_name_1 || wv[0] || "";
-      } else {
-        inputs["image"] = params.image_name_1 || wv[0] || "";
-      }
+      const chosenImg = (title.includes("Last Frame") || title.includes("2."))
+        ? (params.image_name_2 || S.imgData2?.name || params.image_name_1 || S.imgData1?.name || wv[0] || "")
+        : (params.image_name_1 || S.imgData1?.name || wv[0] || "");
+
+      inputs["image"] = chosenImg;
+      inputs["image_path"] = chosenImg;
+      inputs["file"] = chosenImg;
+      inputs["upload"] = chosenImg;
     } else if (classType === "PixaromaLoadAudio") {
-      inputs["audio"] = params.audio_name || wv[0] || "";
+      const chosenAudio = params.audio_name || S.audioData?.name || wv[0] || "";
+      inputs["audio"] = chosenAudio;
+      inputs["file"] = chosenAudio;
+      inputs["audio_file"] = chosenAudio;
+      inputs["path"] = chosenAudio;
+
+      if (node.properties && node.properties.loadAudioState) {
+        const audioState = JSON.parse(JSON.stringify(node.properties.loadAudioState));
+        audioState.file = chosenAudio;
+        inputs["loadAudioState"] = audioState;
+        inputs["LoadAudioState"] = audioState;
+      }
     } else if (classType === "PixaromaLabel" || classType === "PixaromaNote") {
       inputs["text"] = wv[0] || "";
     }
@@ -2290,8 +2304,8 @@ app.registerExtension({
               const w = tempImg.naturalWidth;
               const h = tempImg.naturalHeight;
               const imgObj = { name: serverFileName, url: objectUrl, width: w, height: h };
-              if (slotKey === 1) imgData1 = imgObj;
-              else imgData2 = imgObj;
+              if (slotKey === 1) { imgData1 = imgObj; S.imgData1 = imgObj; }
+              else { imgData2 = imgObj; S.imgData2 = imgObj; }
               thumbImg.src = objectUrl;
               dimBadge.textContent = `${w} × ${h} px • ${serverFileName}`;
               emptyArea.style.display = "none";
@@ -2306,8 +2320,8 @@ app.registerExtension({
         clearBtn.onclick = (e) => {
           e.stopPropagation();
           fileInput.value = "";
-          if (slotKey === 1) imgData1 = null;
-          else imgData2 = null;
+          if (slotKey === 1) { imgData1 = null; S.imgData1 = null; }
+          else { imgData2 = null; S.imgData2 = null; }
           previewArea.style.display = "none";
           emptyArea.style.display = "flex";
         };
@@ -2436,6 +2450,7 @@ app.registerExtension({
             const serverFileName = data.name || file.name;
             const objectUrl = URL.createObjectURL(file);
             audioData = { name: serverFileName, url: objectUrl, file: file };
+            S.audioData = audioData;
             audioPlayer.src = objectUrl;
             nameLbl.textContent = serverFileName;
             emptyArea.style.display = "none";
@@ -2449,6 +2464,7 @@ app.registerExtension({
                 onCropSuccess: (newFileName, newUrl, newFile, durationSec) => {
                   currentUploadedAudioFile = newFile;
                   audioData = { name: newFileName, url: newUrl, file: newFile };
+                  S.audioData = audioData;
                   audioPlayer.src = newUrl;
                   try { audioPlayer.load(); } catch(err){}
                   nameLbl.textContent = `${newFileName} (${durationSec}s)`;
@@ -2463,6 +2479,7 @@ app.registerExtension({
           e.stopPropagation();
           audioInput.value = "";
           audioData = null;
+          S.audioData = null;
           audioPlayer.src = "";
           previewArea.style.display = "none";
           emptyArea.style.display = "flex";
@@ -4244,40 +4261,36 @@ app.registerExtension({
       api.addEventListener("exec_error", handleExecutionError);
       api.addEventListener("execution_interrupted", handleExecutionError);
 
-      if (api.socket) {
-        try {
-          api.socket.addEventListener("message", (event) => {
-            try {
-              const msg = JSON.parse(event.data);
-              if (msg.type === "execution_error" || msg.type === "exec_error") {
-                handleExecutionError({ detail: msg.data });
-              }
-            } catch (err) {}
-          });
-        } catch (err) {}
-      }
-
       api.addEventListener("progress", (e) => {
         if (e.detail && e.detail.max) {
           const pct = Math.round((e.detail.value / e.detail.max) * 100);
           tx(statusLabel, `Rendering frame ${e.detail.value}/${e.detail.max}`);
+          statusLabel.style.color = C.text;
           progressBarInner.style.width = `${pct}%`;
         }
       });
 
-      api.addEventListener("executed", (e) => {
-        if (e.detail && e.detail.output) {
-          genBtn.disabled = false;
-          genBtn.innerHTML = "";
-          genBtn.appendChild(svgIcon("play", 16, "#111"));
-          genBtn.appendChild(document.createTextNode("Generate"));
+      const handleExecutedEvent = (e) => {
+        genBtn.disabled = false;
+        genBtn.innerHTML = "";
+        genBtn.appendChild(svgIcon("play", 16, "#111"));
+        genBtn.appendChild(document.createTextNode("Generate"));
 
-          tx(statusLabel, "Generation Complete!");
-          progressBarInner.style.width = "100%";
-          playDone();
+        tx(statusLabel, "Generation Complete!");
+        statusLabel.style.color = LIME;
+        progressBarInner.style.width = "100%";
+        playDone();
 
-          if (e.detail.output.gifs && e.detail.output.gifs[0]) {
-            const url = api.apiURL(`/view?filename=${e.detail.output.gifs[0].filename}&subfolder=${e.detail.output.gifs[0].subfolder}&type=${e.detail.output.gifs[0].type}`);
+        if (e && e.detail && e.detail.output) {
+          const out = e.detail.output;
+          const items = out.gifs || out.images || out.videos;
+          if (items && items[0]) {
+            const item = items[0];
+            const fn = encodeURIComponent(item.filename || "");
+            const sf = encodeURIComponent(item.subfolder || "");
+            const tp = encodeURIComponent(item.type || "output");
+            const url = api.apiURL(`/view?filename=${fn}&subfolder=${sf}&type=${tp}`);
+
             placeholder.style.display = "none";
             videoPlayer.style.display = "block";
             videoPlayer.src = url;
@@ -4285,7 +4298,24 @@ app.registerExtension({
             videoPlayer.play().catch(() => {});
           }
         }
-      });
+      };
+
+      api.addEventListener("executed", handleExecutedEvent);
+
+      if (api.socket) {
+        try {
+          api.socket.addEventListener("message", (event) => {
+            try {
+              const msg = JSON.parse(event.data);
+              if (msg.type === "executed") {
+                handleExecutedEvent({ detail: msg.data });
+              } else if (msg.type === "execution_error" || msg.type === "exec_error") {
+                handleExecutionError({ detail: msg.data });
+              }
+            } catch (err) {}
+          });
+        } catch (err) {}
+      }
 
       // Mount widget strictly using addDOMWidget with root & fk-root scoping
       this.addDOMWidget("minimax_h3_ui", "div", root, {
