@@ -682,6 +682,72 @@ async function fetchAllObjectInfo() {
   return _allObjectInfo || {};
 }
 
+// Pixaroma nodes keep their real configuration in `node.properties.<xxx>State`,
+// NOT in widgets_values (which is usually empty). The API prompt must carry the
+// patched state object or the node silently falls back to the template defaults
+// (bundled demo image/audio, 864px, 4s, template prompt) - which is why the UI
+// size / duration / prompt used to be ignored.
+function patchPixaromaState(stateKey, state, params) {
+  const num = (v, d) => (v === undefined || v === null || v === "" || isNaN(parseFloat(v)) ? d : parseFloat(v));
+
+  switch (stateKey) {
+    case "durationState":
+      state.seconds = num(params.duration, state.seconds ?? 4);
+      state.fps = parseInt(num(params.fps, state.fps ?? 24));
+      break;
+
+    case "longestSideState":
+      state.size = parseInt(num(params.longest_side, state.size ?? 864));
+      if (params.aspect_ratio) state.ratio = params.aspect_ratio;
+      if (params.crop_from) state.anchor = params.crop_from;
+      if (typeof params.upscale_small === "boolean") state.allow_upscale = params.upscale_small;
+      if (params.resample_mode) state.resample = params.resample_mode;
+      break;
+
+    case "sizesState":
+      state.w = parseInt(num(params.width, state.w ?? 864));
+      state.h = parseInt(num(params.height, state.h ?? 480));
+      break;
+
+    case "loadAudioState": {
+      const audio = params.audio_name || "";
+      if (audio) state.file = audio;
+      state.start = 0;
+      state.length = num(params.duration, state.length ?? 5);
+      break;
+    }
+
+    case "promptState": {
+      const text = params.prompt || "";
+      if (text) {
+        state.text = text;
+        state.lastRun = text;
+      }
+      break;
+    }
+
+    default:
+      break;
+  }
+  return state;
+}
+
+// Assign a state object under every key spelling the backend might expect:
+// the property name itself, its capitalized variant, and any required input
+// whose name matches case-insensitively. Extra keys are ignored by validation.
+function assignState(inputs, stateKey, state, nodeDef) {
+  const capKey = stateKey.charAt(0).toUpperCase() + stateKey.slice(1);
+  inputs[stateKey] = state;
+  inputs[capKey] = state;
+
+  const required = nodeDef && nodeDef.input && nodeDef.input.required;
+  if (required) {
+    Object.keys(required).forEach(k => {
+      if (k.toLowerCase() === stateKey.toLowerCase()) inputs[k] = state;
+    });
+  }
+}
+
 async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInner) {
   const modeKey = mode === "image_to_video_fflf" ? "image_to_video_fflf" :
                  (mode === "reference_to_video_sing" ? "reference_to_video_sing" :
@@ -703,19 +769,24 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
     const inputs = {};
     const wv = node.widgets_values || [];
 
-    // 1. Pre-fill required non-link widget inputs from /object_info
+    // 1. Pre-fill required widget inputs from /object_info.
+    // widgets_values is positional over EVERY widget-backed input, including
+    // ones that were converted to links - so the cursor must advance for those
+    // too, otherwise every widget after a converted one reads a shifted value.
     const nodeDef = allObjInfo[classType];
     if (nodeDef && nodeDef.input && nodeDef.input.required) {
-      const reqKeys = Object.keys(nodeDef.input.required);
+      const WIDGET_TYPES = new Set(["INT", "FLOAT", "STRING", "BOOLEAN", "COMBO"]);
       let widgetIdx = 0;
-      reqKeys.forEach(key => {
+      Object.entries(nodeDef.input.required).forEach(([key, spec]) => {
+        const type = spec && spec[0];
+        const isWidget = Array.isArray(type) || WIDGET_TYPES.has(type);
+        if (!isWidget) return;
+
         const isLinked = node.inputs && node.inputs.some(i => i.name === key && i.link != null);
-        if (!isLinked) {
-          if (widgetIdx < wv.length) {
-            inputs[key] = wv[widgetIdx];
-          }
-          widgetIdx++;
+        if (!isLinked && widgetIdx < wv.length) {
+          inputs[key] = wv[widgetIdx];
         }
+        widgetIdx++;
       });
     }
 
@@ -736,15 +807,12 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
     } else if (classType === "PixaromaPrompt") {
       inputs["text"] = params.prompt || "";
     } else if (classType === "PixaromaSizes") {
+      // sizesState lives in widgets_values[0] for this node, unlike the others
       const sizesStateVal = wv[0] ? JSON.parse(JSON.stringify(wv[0])) : { version: 1, sizes: [] };
       if (typeof sizesStateVal === "object" && sizesStateVal !== null) {
-        sizesStateVal.w = parseInt(params.width || 864);
-        sizesStateVal.h = parseInt(params.height || 480);
+        patchPixaromaState("sizesState", sizesStateVal, params);
       }
-      inputs["sizesState"] = sizesStateVal;
-      inputs["SizesState"] = sizesStateVal;
-    } else if (classType === "PixaromaDuration") {
-      inputs["duration"] = parseInt(params.duration || 4);
+      assignState(inputs, "sizesState", sizesStateVal, nodeDef);
     } else if (classType === "PixaromaSaveMp4") {
       inputs["fps"] = parseInt(params.fps || 24);
       inputs["filename_prefix"] = `MinimaxH3_${mode}`;
@@ -765,28 +833,33 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
     } else if (classType === "PixaromaLoadImageMini") {
       const title = node.title || "";
       const chosenImg = (title.includes("Last Frame") || title.includes("2."))
-        ? (params.image_name_2 || S.imgData2?.name || params.image_name_1 || S.imgData1?.name || wv[0] || "")
-        : (params.image_name_1 || S.imgData1?.name || wv[0] || "");
+        ? (params.image_name_2 || params.image_name_1 || wv[0] || "")
+        : (params.image_name_1 || wv[0] || "");
 
       inputs["image"] = chosenImg;
       inputs["image_path"] = chosenImg;
       inputs["file"] = chosenImg;
       inputs["upload"] = chosenImg;
     } else if (classType === "PixaromaLoadAudio") {
-      const chosenAudio = params.audio_name || S.audioData?.name || wv[0] || "";
+      const chosenAudio = params.audio_name || wv[0] || "";
       inputs["audio"] = chosenAudio;
       inputs["file"] = chosenAudio;
       inputs["audio_file"] = chosenAudio;
       inputs["path"] = chosenAudio;
-
-      if (node.properties && node.properties.loadAudioState) {
-        const audioState = JSON.parse(JSON.stringify(node.properties.loadAudioState));
-        audioState.file = chosenAudio;
-        inputs["loadAudioState"] = audioState;
-        inputs["LoadAudioState"] = audioState;
-      }
+      params = Object.assign({}, params, { audio_name: chosenAudio });
     } else if (classType === "PixaromaLabel" || classType === "PixaromaNote") {
       inputs["text"] = wv[0] || "";
+    }
+
+    // 2b. Carry patched Pixaroma state objects (durationState, longestSideState,
+    // loadAudioState, promptState, ...) from node.properties into the payload.
+    if (node.properties) {
+      Object.keys(node.properties).forEach(propKey => {
+        const val = node.properties[propKey];
+        if (!propKey.toLowerCase().endsWith("state") || typeof val !== "object" || val === null) return;
+        const state = patchPixaromaState(propKey, JSON.parse(JSON.stringify(val)), params);
+        assignState(inputs, propKey, state, nodeDef);
+      });
     }
 
     // 3. Connect linked inputs (overrides widget values if linked)
@@ -4174,6 +4247,7 @@ app.registerExtension({
       setMode(S.mode);
 
       // Generate Action Handler
+      let activePromptId = null;
       genBtn.onclick = async () => {
         let activeWorkflowMode = S.mode;
         if (S.mode === "I2V") {
@@ -4208,7 +4282,7 @@ app.registerExtension({
         progressBarInner.style.width = "15%";
 
         try {
-          await executePixaromaWorkflow(activeWorkflowMode, {
+          const queued = await executePixaromaWorkflow(activeWorkflowMode, {
             prompt: S.prompt,
             negative_prompt: S.negativePrompt,
             duration: S.duration,
@@ -4218,10 +4292,16 @@ app.registerExtension({
             loras: S.loras,
             width: S.width,
             height: S.height,
+            longest_side: S.longest_side,
+            aspect_ratio: S.aspect_ratio,
+            crop_from: S.crop_from,
+            upscale_small: S.upscale_small,
+            resample_mode: S.resample_mode,
             image_name_1: imgData1 ? imgData1.name : null,
             image_name_2: imgData2 ? imgData2.name : null,
             audio_name: audioData ? audioData.name : null,
           }, statusLabel, progressBarInner);
+          activePromptId = (queued && queued.prompt_id) || null;
         } catch (err) {
           genBtn.disabled = false;
           genBtn.innerHTML = "";
@@ -4270,6 +4350,58 @@ app.registerExtension({
         }
       });
 
+      // PixaromaSaveMp4 does not publish its result under the conventional
+      // gifs/images/videos UI keys, so scan every list in the output dict for
+      // something that looks like a playable video file.
+      const VIDEO_EXT = /\.(mp4|webm|mov|m4v|mkv)$/i;
+      const findVideoItem = (out) => {
+        if (!out || typeof out !== "object") return null;
+        for (const val of Object.values(out)) {
+          const list = Array.isArray(val) ? val : [val];
+          for (const item of list) {
+            if (item && typeof item === "object" && typeof item.filename === "string" && VIDEO_EXT.test(item.filename)) {
+              return item;
+            }
+          }
+        }
+        return null;
+      };
+
+      const playVideoItem = (item) => {
+        if (!item) return false;
+        const fn = encodeURIComponent(item.filename || "");
+        const sf = encodeURIComponent(item.subfolder || "");
+        const tp = encodeURIComponent(item.type || "output");
+        const url = api.apiURL(`/view?filename=${fn}&subfolder=${sf}&type=${tp}`);
+
+        placeholder.style.display = "none";
+        videoPlayer.style.display = "block";
+        videoPlayer.src = url;
+        videoPlayer.load();
+        videoPlayer.play().catch(() => {});
+        return true;
+      };
+
+      // Fallback: the mp4 is written after the UI event in some Pixaroma
+      // versions, so poll /history for the finished prompt.
+      const playFromHistory = async (promptId, attempt = 0) => {
+        if (!promptId) return;
+        try {
+          const res = await api.fetchApi(`/history/${promptId}`);
+          if (res && res.ok) {
+            const hist = await res.json();
+            const entry = hist[promptId];
+            const outputs = (entry && entry.outputs) || {};
+            for (const nodeOut of Object.values(outputs)) {
+              if (playVideoItem(findVideoItem(nodeOut))) return;
+            }
+          }
+        } catch (err) {
+          console.warn("[MinimaxH3] history lookup failed:", err);
+        }
+        if (attempt < 10) setTimeout(() => playFromHistory(promptId, attempt + 1), 1000);
+      };
+
       const handleExecutedEvent = (e) => {
         genBtn.disabled = false;
         genBtn.innerHTML = "";
@@ -4281,33 +4413,21 @@ app.registerExtension({
         progressBarInner.style.width = "100%";
         playDone();
 
-        if (e && e.detail && e.detail.output) {
-          const out = e.detail.output;
-          const items = out.gifs || out.images || out.videos;
-          if (items && items[0]) {
-            const item = items[0];
-            const fn = encodeURIComponent(item.filename || "");
-            const sf = encodeURIComponent(item.subfolder || "");
-            const tp = encodeURIComponent(item.type || "output");
-            const url = api.apiURL(`/view?filename=${fn}&subfolder=${sf}&type=${tp}`);
-
-            placeholder.style.display = "none";
-            videoPlayer.style.display = "block";
-            videoPlayer.src = url;
-            videoPlayer.load();
-            videoPlayer.play().catch(() => {});
-          }
+        const detail = (e && e.detail) || {};
+        if (!playVideoItem(findVideoItem(detail.output))) {
+          playFromHistory(detail.prompt_id || activePromptId);
         }
       };
 
       api.addEventListener("executed", handleExecutedEvent);
+      api.addEventListener("execution_success", handleExecutedEvent);
 
       if (api.socket) {
         try {
           api.socket.addEventListener("message", (event) => {
             try {
               const msg = JSON.parse(event.data);
-              if (msg.type === "executed") {
+              if (msg.type === "executed" || msg.type === "execution_success") {
                 handleExecutedEvent({ detail: msg.data });
               } else if (msg.type === "execution_error" || msg.type === "exec_error") {
                 handleExecutionError({ detail: msg.data });
