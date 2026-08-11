@@ -743,8 +743,13 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
     } else if (classType === "PixaromaPrompt") {
       inputs["text"] = params.prompt;
     } else if (classType === "PixaromaSizes") {
-      inputs["width"] = parseInt(params.width || 864);
-      inputs["height"] = parseInt(params.height || 480);
+      const sizesStateVal = (node.widgets_values && node.widgets_values[0]) ? JSON.parse(JSON.stringify(node.widgets_values[0])) : { version: 1, sizes: [] };
+      if (typeof sizesStateVal === "object" && sizesStateVal !== null) {
+        sizesStateVal.w = parseInt(params.width || 864);
+        sizesStateVal.h = parseInt(params.height || 480);
+      }
+      inputs["sizesState"] = sizesStateVal;
+      inputs["SizesState"] = sizesStateVal;
     } else if (classType === "PixaromaDuration") {
       inputs["duration"] = parseInt(params.duration);
     } else if (classType === "PixaromaSaveMp4") {
@@ -4213,6 +4218,34 @@ app.registerExtension({
           statusLabel.style.color = C.err;
         }
       };
+
+      api.addEventListener("execution_start", (e) => {
+        statusRow.style.display = "flex";
+        tx(statusLabel, "Executing workflow...");
+        progressBarInner.style.width = "20%";
+      });
+
+      api.addEventListener("execution_error", (e) => {
+        genBtn.disabled = false;
+        genBtn.innerHTML = "";
+        genBtn.appendChild(svgIcon("play", 16, "#111"));
+        genBtn.appendChild(document.createTextNode("Generate"));
+
+        const detailMsg = e.detail && e.detail.exception_message ? e.detail.exception_message : "Execution failed";
+        const nodeType = e.detail && e.detail.node_type ? ` [${e.detail.node_type}]` : "";
+        tx(statusLabel, `Error${nodeType}: ${detailMsg}`);
+        statusLabel.style.color = C.err;
+      });
+
+      api.addEventListener("execution_interrupted", () => {
+        genBtn.disabled = false;
+        genBtn.innerHTML = "";
+        genBtn.appendChild(svgIcon("play", 16, "#111"));
+        genBtn.appendChild(document.createTextNode("Generate"));
+
+        tx(statusLabel, "Execution Interrupted");
+        statusLabel.style.color = C.err;
+      });
 
       api.addEventListener("progress", (e) => {
         if (e.detail && e.detail.max) {
