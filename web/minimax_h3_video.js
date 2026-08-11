@@ -4366,6 +4366,7 @@ app.registerExtension({
 
       // Generate Action Handler
       let activePromptId = null;
+      let ourRunActive = false;
       genBtn.onclick = async () => {
         let activeWorkflowMode = S.mode;
         if (S.mode === "I2V") {
@@ -4399,6 +4400,7 @@ app.registerExtension({
         tx(statusLabel, "Queuing workflow...");
         progressBarInner.style.width = "15%";
 
+        ourRunActive = true;
         try {
           const queued = await executePixaromaWorkflow(activeWorkflowMode, {
             prompt: S.prompt,
@@ -4422,6 +4424,7 @@ app.registerExtension({
           }, statusLabel, progressBarInner);
           activePromptId = (queued && queued.prompt_id) || null;
         } catch (err) {
+          ourRunActive = false;
           genBtn.disabled = false;
           genBtn.innerHTML = "";
           genBtn.appendChild(svgIcon("play", 16, "#111"));
@@ -4433,6 +4436,8 @@ app.registerExtension({
       };
 
       const handleExecutionError = (e) => {
+        if (!isOurs(e && e.detail)) return;
+        ourRunActive = false;
         genBtn.disabled = false;
         genBtn.innerHTML = "";
         genBtn.appendChild(svgIcon("play", 16, "#111"));
@@ -4450,6 +4455,7 @@ app.registerExtension({
       };
 
       api.addEventListener("execution_start", (e) => {
+        if (!ourRunActive) return;
         statusRow.style.display = "flex";
         tx(statusLabel, "Executing workflow...");
         statusLabel.style.color = C.text;
@@ -4461,6 +4467,7 @@ app.registerExtension({
       api.addEventListener("execution_interrupted", handleExecutionError);
 
       api.addEventListener("progress", (e) => {
+        if (!ourRunActive) return;
         if (e.detail && e.detail.max) {
           const pct = Math.round((e.detail.value / e.detail.max) * 100);
           tx(statusLabel, `Rendering frame ${e.detail.value}/${e.detail.max}`);
@@ -4521,7 +4528,19 @@ app.registerExtension({
         if (attempt < 10) setTimeout(() => playFromHistory(promptId, attempt + 1), 1000);
       };
 
+      // ComfyUI broadcasts execution events for every prompt, including ones
+      // queued from another tab or the Run button. Without this the node shows
+      // "Generating..." and a progress bar for somebody else's run, which makes
+      // a failed job here look like a successful one.
+      const isOurs = (detail) => {
+        const pid = detail && detail.prompt_id;
+        if (!pid || !activePromptId) return true;   // can't tell - assume ours
+        return pid === activePromptId;
+      };
+
       const handleExecutedEvent = (e) => {
+        if (!isOurs(e && e.detail)) return;
+        ourRunActive = false;
         genBtn.disabled = false;
         genBtn.innerHTML = "";
         genBtn.appendChild(svgIcon("play", 16, "#111"));
