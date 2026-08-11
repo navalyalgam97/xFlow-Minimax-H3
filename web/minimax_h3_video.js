@@ -667,6 +667,21 @@ async function resolveModelName(classType, inputName, rawPreferred) {
   return normPreferred;
 }
 
+let _allObjectInfo = null;
+async function fetchAllObjectInfo() {
+  if (!_allObjectInfo) {
+    try {
+      const res = await api.fetchApi("/object_info");
+      if (res && res.ok) {
+        _allObjectInfo = await res.json();
+      }
+    } catch (e) {
+      console.warn("[MinimaxH3] Could not fetch /object_info:", e);
+    }
+  }
+  return _allObjectInfo || {};
+}
+
 async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInner) {
   const modeKey = mode === "image_to_video_fflf" ? "image_to_video_fflf" :
                  (mode === "reference_to_video_sing" ? "reference_to_video_sing" :
@@ -679,6 +694,7 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
   const workflowJson = await res.json();
   if (!workflowJson || !workflowJson.nodes) throw new Error(`Failed to load workflow template for mode: ${mode}`);
 
+  const allObjInfo = await fetchAllObjectInfo();
   const promptPayload = {};
 
   for (const node of workflowJson.nodes) {
@@ -686,52 +702,78 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
     const classType = node.type;
     const inputs = {};
 
+    // 1. Auto-map widget values to parameter names from /object_info
+    const nodeDef = allObjInfo[classType];
+    const reqInputs = (nodeDef && nodeDef.input && nodeDef.input.required) ? Object.keys(nodeDef.input.required) : [];
+    const optInputs = (nodeDef && nodeDef.input && nodeDef.input.optional) ? Object.keys(nodeDef.input.optional) : [];
+    
+    const connectedLinkNames = new Set((node.inputs || []).filter(i => i.link != null).map(i => i.name));
+
+    let widgetParamNames = [];
+    reqInputs.forEach(name => {
+      if (!connectedLinkNames.has(name)) widgetParamNames.push(name);
+    });
+    optInputs.forEach(name => {
+      if (!connectedLinkNames.has(name)) widgetParamNames.push(name);
+    });
+
     if (node.widgets_values && Array.isArray(node.widgets_values)) {
-      if (classType === "CLIPLoader") {
-        const raw = node.widgets_values[0] || "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors";
-        inputs["clip_name"] = await resolveModelName("CLIPLoader", "clip_name", raw);
-        inputs["type"] = node.widgets_values[1] || "minimax";
-      } else if (classType === "VAELoader") {
-        const raw = node.widgets_values[0] || "minimax_h3_video_vae_fp16.safetensors";
-        inputs["vae_name"] = await resolveModelName("VAELoader", "vae_name", raw);
-      } else if (classType === "UNETLoader") {
-        const fallback = (mode.includes("reference") || mode === "R2V" ? "h3/minimax_h3_ref2va_pruned_int8_convrot.safetensors" : "h3/minimax_h3_fl2va_pruned_int8_convrot.safetensors");
-        const raw = node.widgets_values[0] || fallback;
-        inputs["unet_name"] = await resolveModelName("UNETLoader", "unet_name", raw);
-      } else if (classType === "PixaromaPrompt") {
-        inputs["text"] = params.prompt;
-      } else if (classType === "PixaromaSizes") {
-        inputs["width"] = parseInt(params.width || 864);
-        inputs["height"] = parseInt(params.height || 480);
-      } else if (classType === "PixaromaDuration") {
-        inputs["duration"] = parseInt(params.duration);
-      } else if (classType === "PixaromaSaveMp4") {
-        inputs["fps"] = parseInt(params.fps);
-        inputs["filename_prefix"] = `MinimaxH3_${mode}`;
-      } else if (classType === "KSampler") {
-        inputs["seed"] = params.seed === 0 ? Math.floor(Math.random() * 1000000000) : parseInt(params.seed);
-        inputs["steps"] = 20;
-        inputs["cfg"] = parseFloat(params.cfg);
-        inputs["sampler_name"] = "euler";
-        inputs["scheduler"] = "normal";
-        inputs["denoise"] = 1.0;
-      } else if (classType === "MiniMaxH3ImageToVideo" || classType === "MiniMaxH3ReferenceToVideo") {
-        inputs["prompt"] = params.prompt;
-        inputs["motion_strength"] = parseFloat(params.motion_strength || 0.5);
-        if (params.width) inputs["width"] = parseInt(params.width);
-        if (params.height) inputs["height"] = parseInt(params.height);
-      } else if (classType === "PixaromaLoadImageMini") {
-        const title = node.title || "";
-        if (title.includes("Last Frame") || title.includes("2.")) {
-          inputs["image"] = params.image_name_2 || params.image_name_1 || node.widgets_values[0];
-        } else {
-          inputs["image"] = params.image_name_1 || node.widgets_values[0];
+      node.widgets_values.forEach((val, idx) => {
+        if (idx < widgetParamNames.length) {
+          const paramName = widgetParamNames[idx];
+          inputs[paramName] = val;
         }
-      } else if (classType === "PixaromaLoadAudio") {
-        inputs["audio"] = params.audio_name || node.widgets_values[0];
-      }
+      });
     }
 
+    // 2. Specific parameter overrides & dynamic model resolutions
+    if (classType === "CLIPLoader") {
+      const raw = inputs["clip_name"] || (node.widgets_values && node.widgets_values[0]) || "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors";
+      inputs["clip_name"] = await resolveModelName("CLIPLoader", "clip_name", raw);
+      if (!inputs["type"]) inputs["type"] = (node.widgets_values && node.widgets_values[1]) || "minimax";
+      if (!inputs["device"]) inputs["device"] = "default";
+    } else if (classType === "VAELoader") {
+      const raw = inputs["vae_name"] || (node.widgets_values && node.widgets_values[0]) || "minimax_h3_video_vae_fp16.safetensors";
+      inputs["vae_name"] = await resolveModelName("VAELoader", "vae_name", raw);
+    } else if (classType === "UNETLoader") {
+      const fallback = (mode.includes("reference") || mode === "R2V" ? "h3/minimax_h3_ref2va_pruned_int8_convrot.safetensors" : "h3/minimax_h3_fl2va_pruned_int8_convrot.safetensors");
+      const raw = inputs["unet_name"] || (node.widgets_values && node.widgets_values[0]) || fallback;
+      inputs["unet_name"] = await resolveModelName("UNETLoader", "unet_name", raw);
+      if (!inputs["weight_dtype"]) inputs["weight_dtype"] = "default";
+    } else if (classType === "PixaromaPrompt") {
+      inputs["text"] = params.prompt;
+    } else if (classType === "PixaromaSizes") {
+      inputs["width"] = parseInt(params.width || 864);
+      inputs["height"] = parseInt(params.height || 480);
+    } else if (classType === "PixaromaDuration") {
+      inputs["duration"] = parseInt(params.duration);
+    } else if (classType === "PixaromaSaveMp4") {
+      inputs["fps"] = parseInt(params.fps);
+      inputs["filename_prefix"] = `MinimaxH3_${mode}`;
+    } else if (classType === "KSampler") {
+      inputs["seed"] = params.seed === 0 ? Math.floor(Math.random() * 1000000000) : parseInt(params.seed);
+      inputs["steps"] = 20;
+      inputs["cfg"] = parseFloat(params.cfg);
+      inputs["sampler_name"] = "euler";
+      inputs["scheduler"] = "normal";
+      inputs["denoise"] = 1.0;
+    } else if (classType === "MiniMaxH3ImageToVideo" || classType === "MiniMaxH3ReferenceToVideo") {
+      inputs["prompt"] = params.prompt;
+      inputs["motion_strength"] = parseFloat(params.motion_strength || 0.5);
+      if (params.width) inputs["width"] = parseInt(params.width);
+      if (params.height) inputs["height"] = parseInt(params.height);
+    } else if (classType === "PixaromaLoadImageMini") {
+      const title = node.title || "";
+      if (title.includes("Last Frame") || title.includes("2.")) {
+        inputs["image"] = params.image_name_2 || params.image_name_1 || (node.widgets_values && node.widgets_values[0]) || "";
+      } else {
+        inputs["image"] = params.image_name_1 || (node.widgets_values && node.widgets_values[0]) || "";
+      }
+    } else if (classType === "PixaromaLoadAudio") {
+      inputs["audio"] = params.audio_name || (node.widgets_values && node.widgets_values[0]) || "";
+    }
+
+    // 3. Connect linked inputs
     if (node.inputs && Array.isArray(node.inputs)) {
       node.inputs.forEach(inp => {
         if (inp.link != null) {
@@ -754,7 +796,18 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
 
   const promptResult = await response.json();
   if (promptResult.error) {
-    throw new Error(promptResult.error.message || JSON.stringify(promptResult.error));
+    console.error("[MinimaxH3] Detailed Prompt Error:", promptResult);
+    let errMsg = promptResult.error.message || "Prompt outputs failed validation";
+    if (promptResult.node_errors && Object.keys(promptResult.node_errors).length > 0) {
+      const errDetails = Object.entries(promptResult.node_errors).map(([nid, err]) => {
+        const msgs = (err.errors || []).map(e => e.message).join("; ");
+        return `Node ${nid}: ${msgs}`;
+      }).join(" | ");
+      errMsg += ` (${errDetails})`;
+    } else if (promptResult.error.details) {
+      errMsg += ` (${promptResult.error.details})`;
+    }
+    throw new Error(errMsg);
   }
   return promptResult;
 }
