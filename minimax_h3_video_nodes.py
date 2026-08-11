@@ -125,6 +125,13 @@ _download_state: Dict[str, Dict] = {}
 _download_threads: Dict[str, threading.Thread] = {}
 _download_cancel_events: Dict[str, threading.Event] = {}
 
+# Last generated video metadata, keyed by node id. Written both by the node's
+# own execute (so its VIDEO/metadata_json outputs survive to the next run) and
+# by the /minimax_h3/set_output route the frontend reports into. It was
+# referenced in both places but never actually created, so executing the node
+# raised NameError before it could return anything.
+_last_output_by_node: Dict[str, Dict] = {}
+
 
 def _get_model_target_path(model_id: str) -> Tuple[str, str]:
     """Get target directory and full file path for a model safely without raising exceptions"""
