@@ -158,6 +158,22 @@ def _get_model_target_path(model_id: str) -> Tuple[str, str]:
         target_dir = base_dir
 
     target_path = os.path.join(target_dir, filename)
+    if os.path.exists(target_path):
+        return target_dir, target_path
+
+    # Check alternative candidate paths (e.g., direct base_dir, unet folder)
+    candidates = [
+        os.path.join(base_dir, filename),
+        os.path.join(os.path.dirname(base_dir), "unet", "h3", filename),
+        os.path.join(os.path.dirname(base_dir), "unet", filename),
+        os.path.join(os.path.dirname(base_dir), "diffusion_models", filename),
+        os.path.join(os.path.dirname(base_dir), "diffusion_models", "h3", filename),
+    ]
+
+    for cand in candidates:
+        if os.path.exists(cand):
+            return os.path.dirname(cand), cand
+
     return target_dir, target_path
 
 

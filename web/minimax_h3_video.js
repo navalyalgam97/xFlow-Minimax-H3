@@ -632,6 +632,41 @@ async function checkSystemValidation(mode) {
   }
 }
 
+let _objectInfoCache = {};
+async function resolveModelName(classType, inputName, rawPreferred) {
+  const normPreferred = String(rawPreferred || "").replace(/\\/g, "/").trim();
+  const basePreferred = normPreferred.split("/").pop().toLowerCase();
+
+  try {
+    if (!_objectInfoCache[classType]) {
+      const res = await api.fetchApi(`/object_info/${classType}`);
+      if (res && res.ok) {
+        _objectInfoCache[classType] = await res.json();
+      }
+    }
+    const info = _objectInfoCache[classType] && _objectInfoCache[classType][classType];
+    if (info && info.input && info.input.required && info.input.required[inputName]) {
+      const choices = info.input.required[inputName][0];
+      if (Array.isArray(choices) && choices.length > 0) {
+        // 1. Exact match with normalized slashes
+        const exact = choices.find(c => String(c).replace(/\\/g, "/").toLowerCase() === normPreferred.toLowerCase());
+        if (exact) return exact;
+
+        // 2. Match basename
+        const baseMatch = choices.find(c => String(c).replace(/\\/g, "/").toLowerCase().endsWith(basePreferred));
+        if (baseMatch) return baseMatch;
+
+        // 3. Fallback to first choice
+        if (choices[0]) return choices[0];
+      }
+    }
+  } catch (e) {
+    console.warn(`[MinimaxH3] Could not query /object_info/${classType}:`, e);
+  }
+
+  return normPreferred;
+}
+
 async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInner) {
   const modeKey = mode === "image_to_video_fflf" ? "image_to_video_fflf" :
                  (mode === "reference_to_video_sing" ? "reference_to_video_sing" :
@@ -646,19 +681,23 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
 
   const promptPayload = {};
 
-  workflowJson.nodes.forEach(node => {
+  for (const node of workflowJson.nodes) {
     const nodeId = String(node.id);
     const classType = node.type;
     const inputs = {};
 
     if (node.widgets_values && Array.isArray(node.widgets_values)) {
       if (classType === "CLIPLoader") {
-        inputs["clip_name"] = node.widgets_values[0] || "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors";
+        const raw = node.widgets_values[0] || "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors";
+        inputs["clip_name"] = await resolveModelName("CLIPLoader", "clip_name", raw);
         inputs["type"] = node.widgets_values[1] || "minimax";
       } else if (classType === "VAELoader") {
-        inputs["vae_name"] = node.widgets_values[0] || "minimax_h3_video_vae_fp16.safetensors";
+        const raw = node.widgets_values[0] || "minimax_h3_video_vae_fp16.safetensors";
+        inputs["vae_name"] = await resolveModelName("VAELoader", "vae_name", raw);
       } else if (classType === "UNETLoader") {
-        inputs["unet_name"] = node.widgets_values[0] || (mode.includes("reference") || mode === "R2V" ? "h3/minimax_h3_ref2va_pruned_int8_convrot.safetensors" : "h3/minimax_h3_fl2va_pruned_int8_convrot.safetensors");
+        const fallback = (mode.includes("reference") || mode === "R2V" ? "h3/minimax_h3_ref2va_pruned_int8_convrot.safetensors" : "h3/minimax_h3_fl2va_pruned_int8_convrot.safetensors");
+        const raw = node.widgets_values[0] || fallback;
+        inputs["unet_name"] = await resolveModelName("UNETLoader", "unet_name", raw);
       } else if (classType === "PixaromaPrompt") {
         inputs["text"] = params.prompt;
       } else if (classType === "PixaromaSizes") {
@@ -705,7 +744,7 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
     }
 
     promptPayload[nodeId] = { class_type: classType, inputs: inputs };
-  });
+  }
 
   const response = await api.fetchApi("/prompt", {
     method: "POST",
