@@ -4450,6 +4450,7 @@ app.registerExtension({
             audio_name: audioData ? audioData.name : null,
           }, statusLabel, progressBarInner);
           activePromptId = (queued && queued.prompt_id) || null;
+          pollRunUntilDone(activePromptId);
         } catch (err) {
           ourRunActive = false;
           genBtn.disabled = false;
@@ -4565,27 +4566,71 @@ app.registerExtension({
         return pid === activePromptId;
       };
 
-      const handleExecutedEvent = (e) => {
-        if (!isOurs(e && e.detail)) return;
-        ourRunActive = false;
+      const resetGenerateButton = () => {
         genBtn.disabled = false;
         genBtn.innerHTML = "";
         genBtn.appendChild(svgIcon("play", 16, "#111"));
         genBtn.appendChild(document.createTextNode("Generate"));
+      };
+
+      const finishRun = (item, promptId) => {
+        if (!ourRunActive) return;   // already finished by whichever got here first
+        ourRunActive = false;
+        resetGenerateButton();
 
         tx(statusLabel, "Generation Complete!");
         statusLabel.style.color = LIME;
         progressBarInner.style.width = "100%";
         playDone();
 
+        if (!playVideoItem(item)) playFromHistory(promptId || activePromptId);
+      };
+
+      const handleExecutedEvent = (e) => {
+        if (!isOurs(e && e.detail)) return;
         const detail = (e && e.detail) || {};
-        if (!playVideoItem(findVideoItem(detail.output))) {
-          playFromHistory(detail.prompt_id || activePromptId);
-        }
+        finishRun(findVideoItem(detail.output), detail.prompt_id);
       };
 
       api.addEventListener("executed", handleExecutedEvent);
       api.addEventListener("execution_success", handleExecutedEvent);
+
+      // Websocket events are not a reliable completion signal: they can be
+      // missed on reconnect, and a run queued from another tab is filtered out
+      // by design, which would otherwise leave this node stuck on
+      // "Generating..." forever. Poll our own prompt in /history as a backstop.
+      const pollRunUntilDone = async (promptId) => {
+        if (!promptId) return;
+        for (let i = 0; i < 1200 && ourRunActive; i++) {
+          await new Promise(r => setTimeout(r, 2000));
+          if (!ourRunActive) return;
+          try {
+            const res = await api.fetchApi(`/history/${promptId}`);
+            if (!res || !res.ok) continue;
+            const entry = (await res.json())[promptId];
+            if (!entry) continue;   // still queued or running
+
+            const status = entry.status || {};
+            if (status.status_str === "error") {
+              ourRunActive = false;
+              resetGenerateButton();
+              const msgs = (status.messages || [])
+                .filter(msg => msg[0] === "execution_error")
+                .map(msg => (msg[1] || {}).exception_message)
+                .filter(Boolean);
+              tx(statusLabel, `Error: ${msgs[0] || "execution failed"}`);
+              statusLabel.style.color = C.err;
+              return;
+            }
+
+            for (const nodeOut of Object.values(entry.outputs || {})) {
+              const item = findVideoItem(nodeOut);
+              if (item) { finishRun(item, promptId); return; }
+            }
+            if (status.completed) { finishRun(null, promptId); return; }
+          } catch (err) { /* keep polling */ }
+        }
+      };
 
       if (api.socket) {
         try {
