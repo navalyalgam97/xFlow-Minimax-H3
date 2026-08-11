@@ -772,11 +772,28 @@ function assignState(inputs, stateKey, state, nodeDef) {
   });
 }
 
+// Both the pill ids and the resolved workflow names have to map here. The
+// caller converts R2V -> "reference_to_video" before calling, which matched no
+// branch of the old ternary chain and fell through to text_to_video - so R2V
+// and I2V silently ran the text-to-video workflow, which has no reference image
+// or audio node at all, and generated a stranger from the prompt alone.
+const WORKFLOW_MODES = {
+  T2V: "text_to_video",
+  I2V: "image_to_video",
+  R2V: "reference_to_video",
+  text_to_video: "text_to_video",
+  image_to_video: "image_to_video",
+  image_to_video_fflf: "image_to_video_fflf",
+  reference_to_video: "reference_to_video",
+  reference_to_video_sing: "reference_to_video_sing",
+};
+
 async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInner) {
-  const modeKey = mode === "image_to_video_fflf" ? "image_to_video_fflf" :
-                 (mode === "reference_to_video_sing" ? "reference_to_video_sing" :
-                 (mode === "R2V" ? "reference_to_video" :
-                 (mode === "I2V" ? "image_to_video" : "text_to_video")));
+  const modeKey = WORKFLOW_MODES[mode];
+  if (!modeKey) {
+    // Never silently fall back - that is exactly how this went unnoticed.
+    throw new Error(`Unknown generation mode "${mode}" - cannot pick a workflow`);
+  }
   let endpoint = `/minimax_h3/workflow_${modeKey}`;
 
   const res = await fetch(endpoint);
