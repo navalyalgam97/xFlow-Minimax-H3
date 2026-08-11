@@ -777,6 +777,10 @@ function assignState(inputs, stateKey, state, nodeDef) {
 // branch of the old ternary chain and fell through to text_to_video - so R2V
 // and I2V silently ran the text-to-video workflow, which has no reference image
 // or audio node at all, and generated a stranger from the prompt alone.
+// Must match SUBFOLDER in minimax_h3_video_nodes.py - the Gallery route only
+// scans output/<this>.
+const GALLERY_SUBFOLDER = "MinimaxH3";
+
 const WORKFLOW_MODES = {
   T2V: "text_to_video",
   I2V: "image_to_video",
@@ -856,7 +860,15 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
       assignState(inputs, "sizesState", sizesStateVal, nodeDef);
     } else if (classType === "PixaromaSaveMp4") {
       inputs["fps"] = parseInt(params.fps || 24);
-      inputs["filename_prefix"] = `MinimaxH3_${mode}`;
+      // Auto-save on  -> output/MinimaxH3/, where the Gallery route looks.
+      // Auto-save off -> temp/, which ComfyUI clears on restart and the Gallery
+      // never scans. filename_prefix takes a "/" subfolder; save_mode picks the
+      // destination root.
+      const autoSave = params.auto_save !== false;
+      inputs["filename_prefix"] = autoSave
+        ? `${GALLERY_SUBFOLDER}/MinimaxH3_${mode}`
+        : `MinimaxH3_${mode}`;
+      inputs["save_mode"] = autoSave ? "save" : "preview";
     } else if (classType === "KSampler") {
       inputs["seed"] = params.seed === 0 ? Math.floor(Math.random() * 1000000000) : parseInt(params.seed);
       inputs["control_after_generate"] = wv[1] || "randomize";
@@ -2784,15 +2796,20 @@ app.registerExtension({
         boxSizing: "border-box",
       });
 
+      // controls/autoplay/loop are element properties, not CSS - passing them in
+      // the style object silently dropped them, which is why the player had no
+      // transport bar and no way to replay a finished clip.
       const videoPlayer = mk("video", {
         width: "100%",
         height: "100%",
-        controls: true,
-        autoplay: true,
-        loop: true,
         display: "none",
         backgroundColor: "#000",
         objectFit: "contain",
+      }, {
+        controls: true,
+        autoplay: true,
+        loop: false,
+        playsInline: true,
       });
       rightCol.appendChild(videoPlayer);
 
@@ -3457,13 +3474,15 @@ app.registerExtension({
           const vidBox = mk("video", {
             width: "100%",
             height: "130px",
+            objectFit: "cover",
+            borderRadius: "6px",
+            background: "#000",
+          }, {
             src: vid.video_url,
             controls: true,
             loop: true,
             muted: true,
-            objectFit: "cover",
-            borderRadius: "6px",
-            background: "#000",
+            playsInline: true,
           });
 
           const fnLabel = mk("div", { fontSize: "10px", fontWeight: "700", color: C.text, wordBreak: "break-all" }, { textContent: vid.filename });
@@ -4442,6 +4461,7 @@ app.registerExtension({
             longest_side: S.longest_side,
             aspect_ratio: S.aspect_ratio,
             step_round: S.step_round,
+            auto_save: S.autoSave,
             crop_from: S.crop_from,
             upscale_small: S.upscale_small,
             resample_mode: S.resample_mode,
@@ -4573,17 +4593,41 @@ app.registerExtension({
         genBtn.appendChild(document.createTextNode("Generate"));
       };
 
+      // Record what produced the clip, so Gallery cards can show it later.
+      const writeSidecar = async (item) => {
+        if (!item || !S.autoSave) return;
+        try {
+          await fetch("/minimax_h3/save_meta", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              filename: item.filename,
+              metadata: {
+                prompt: S.prompt || "",
+                mode: S.mode,
+                width: S.width, height: S.height,
+                longest_side: S.longest_side, aspect_ratio: S.aspect_ratio,
+                duration: S.duration, fps: S.fps,
+                cfg: S.cfg, seed: S.seed,
+                created: new Date().toISOString(),
+              },
+            }),
+          });
+        } catch (e) { /* the video is saved either way */ }
+      };
+
       const finishRun = (item, promptId) => {
         if (!ourRunActive) return;   // already finished by whichever got here first
         ourRunActive = false;
         resetGenerateButton();
 
-        tx(statusLabel, "Generation Complete!");
+        tx(statusLabel, S.autoSave ? "Generation Complete - saved to Gallery" : "Generation Complete!");
         statusLabel.style.color = LIME;
         progressBarInner.style.width = "100%";
         playDone();
 
         if (!playVideoItem(item)) playFromHistory(promptId || activePromptId);
+        writeSidecar(item);
       };
 
       const handleExecutedEvent = (e) => {
