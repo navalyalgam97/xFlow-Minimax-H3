@@ -913,6 +913,16 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
     });
   });
 
+  // Mirror it to the server too - reading a file over ssh is a lot easier than
+  // asking someone to find the right DevTools tab.
+  try {
+    await fetch("/minimax_h3/debug_payload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ prompt: promptPayload, mode: mode, params: params }),
+    });
+  } catch (e) { /* diagnostics only */ }
+
   const response = await api.fetchApi("/prompt", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

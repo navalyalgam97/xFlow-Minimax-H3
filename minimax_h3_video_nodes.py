@@ -751,6 +751,41 @@ async def save_config_endpoint(request):
         return web.json_response({"success": False, "error": str(e)}, status=400)
 
 
+@PromptServer.instance.routes.post("/minimax_h3/debug_payload")
+async def debug_payload(request):
+    """Write the exact prompt the node is about to submit to last_payload.json.
+
+    The node builds its payload by hand and POSTs straight to /prompt, bypassing
+    the frontend's graphToPrompt, so this file is the only server-side record of
+    what the nodes actually received. Inspect it with:
+        cat <node_dir>/last_payload.json
+    """
+    try:
+        payload = await request.json()
+        out_path = os.path.join(NODE_DIR, "last_payload.json")
+        with open(out_path, "w") as f:
+            json.dump(payload, f, indent=1)
+
+        # Summarise the inputs that decide what the video looks like.
+        summary = []
+        for nid, node in sorted((payload.get("prompt") or {}).items()):
+            ctype = node.get("class_type", "")
+            if ctype not in ("PixaromaLoadImageMini", "PixaromaLoadAudio",
+                             "PixaromaLongestSide", "PixaromaDuration", "PixaromaPrompt"):
+                continue
+            for key in ("image", "LoadAudioState", "LongestSideState", "DurationState", "PromptState"):
+                if key in node.get("inputs", {}):
+                    val = str(node["inputs"][key])
+                    summary.append("  {} {}.{} = {}".format(nid, ctype, key, val[:160]))
+        print("[MinimaxH3Video] Submitted payload ->", out_path)
+        for line in summary:
+            print("[MinimaxH3Video]" + line)
+
+        return web.json_response({"success": True, "path": out_path})
+    except Exception as e:
+        return web.json_response({"success": False, "error": str(e)}, status=400)
+
+
 @PromptServer.instance.routes.get("/minimax_h3/gallery")
 async def get_gallery(request):
     """
