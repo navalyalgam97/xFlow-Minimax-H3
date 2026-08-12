@@ -2,6 +2,25 @@
 
 All notable changes to the **xFlowOne · Minimax H3** single-node video interface for ComfyUI.
 
+## [1.10.0] - 2026-08-12
+
+### ⏱️ Generation Timer, Stop Button, GPT Prompt Helper
+
+- **⏱️ Seven-Segment Generation Timer**: Counts up under the preview caption from the moment Generate is pressed, freezes on the total when the clip lands, holds ~3s so it can be read, then fades off the picture. A deliberate play, scrub or click on the player clears it immediately; any failure hides it rather than stranding a frozen count.
+  - Drawn as SVG rather than shipped as a font: a real LCD face needs the unlit segments ghosted behind the lit ones, and there is no external asset to load. Hard black drop-shadow first, lime bloom second, so the digits keep their edge over a bright frame.
+  - The finished time nearly never survived: the player carries `autoplay`, so `load()` alone fires `play`/`seeking`. The suppression flag now goes up *before* `src` is touched.
+- **🛑 Stop Generation Button**: Replaces the chime preview button beside Generate. Inert and dimmed unless a run of **this node** is in flight, so an idle node can never interrupt somebody else's queue item.
+  - Sends `POST /queue {delete:[prompt_id]}` **and** `POST /interrupt`: interrupt only reaches the job ComfyUI is currently executing, so a prompt still waiting in the queue needs deleting by id. Which state it is in is a race, so it does both.
+  - Clears `activePromptId`, so a late event from the killed run cannot drive the node afterwards.
+- **✨ Generate Button Feedback**: Firefly glow on the button while a run is in flight — uneven beats rather than a symmetric pulse — and the sparkle icon beside "Generating..." now actually spins. Idle no longer glows: the button had carried a permanent halo since long before this release.
+- **🤖 GPT Prompt Button**: Replaces "Director" in the prompt header, styled like Setup. Opens the prompt-writing GPT for the active mode in a new tab (R2V has its own; T2V and I2V share one), with `noopener,noreferrer`. The negative-prompt toggle that Director used to own survives as its own control, so the field stays reachable.
+- **🎙️ Default R2V Prompts**: SPEAK and SING each get a full default prompt, filled on entering R2V and swapped when toggling between them. Only an empty box or the other preset is ever replaced — text you wrote yourself is never clobbered. Leaving R2V takes the preset with it (it is written for a reference image and an audio track), and a **Reset** button restores it if deleted by accident.
+- **🐛 Panel Hung Past The Node's Right Edge**: `root` hardcoded `NODE_W`, but ComfyUI insets the DOM-widget slot ~12px each side, so the panel overflowed by 24px. It now fills the slot.
+  - Fixing that exposed a second fault: the slot takes its height from **content**, not from `computeSize` — probing node heights from 760 to 900 left it at 870 every time — so `height: 100%` dropped the panel to 1.536. Height now derives from width via `aspect-ratio: 16 / 9`, holding a true 1.778 in all three modes.
+- **🧹 Internal**: Three copy-pasted button-reset blocks collapsed into `resetGenerateButton()`. The duplication had already caused two defects here by being updated in some copies and not others.
+
+---
+
 ## [1.9.0] - 2026-08-12
 
 ### 🖼️ Gallery Rework, Fullscreen Mode, 16:9 Node, Settings Panel Fixes

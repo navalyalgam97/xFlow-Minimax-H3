@@ -3,7 +3,7 @@
 <div align="center">
 
 ![xFlowOne Banner](https://img.shields.io/badge/xFlowOne-Minimax_H3-00ff66?style=for-the-badge&logo=comfyui&logoColor=black)
-![Version](https://img.shields.io/badge/version-1.9.0-00ff66?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.10.0-00ff66?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
 
 *A single-node, 1:1 `xFlowOne` design system UI for Minimax H3 Video Generation in ComfyUI V2.*
@@ -62,7 +62,18 @@ All required models can be managed and downloaded automatically via the built-in
 
 ## 📜 Changelog
 
-### Version 1.9.0 (Latest Release)
+### Version 1.10.0 (Latest Release)
+
+> Generation feedback and prompt helpers.
+
+- ⏱️ **Seven-Segment Generation Timer**: Counts up while rendering, freezes on the total, holds ~3s, then fades off the picture. Drawn as SVG (ghosted unlit segments, black shadow) so it stays legible over a bright frame and needs no font file.
+- 🛑 **Stop Generation Button**: Replaces the chime button beside Generate. Live only while **this node** is running, and cancels via both queue-delete and `/interrupt` — interrupt alone misses a prompt still waiting in the queue.
+- ✨ **Generate Feedback**: Firefly glow while running, spinning sparkle icon, and no more permanent halo when idle.
+- 🤖 **GPT Prompt Button**: Replaces "Director"; opens the prompt-writing GPT for the active mode (R2V has its own). The negative-prompt toggle keeps its own control.
+- 🎙️ **Default R2V Prompts**: SPEAK and SING presets fill on entering R2V and swap when toggled, without ever overwriting text you wrote. **Reset** restores one deleted by accident.
+- 🐛 **Panel Overflow Fixed**: The UI hung 24px past the node's right edge; it now fills the widget slot and holds a true 16:9 via `aspect-ratio`.
+
+### Version 1.9.0
 
 > Interface release: gallery rework, fullscreen mode, and a 16:9 node.
 

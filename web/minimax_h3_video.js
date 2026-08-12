@@ -33,12 +33,20 @@ const C = {
 };
 
 // Keep in step with CHANGELOG.md - this is what the Help drawer reports.
-const NODE_VERSION = "1.9.0";
+const NODE_VERSION = "1.10.0";
 
 // The node box is a fixed 16:9 (1360 x 765 is exactly 16:9). Widened rather
 // than shortened so the existing 760px-tall column still fits without scrolling.
 const NODE_W = 1360;
 const NODE_H = 765;
+
+// Default R2V prompts. Both lock the subject to the reference image and keep the
+// head steady so the mouth reads; they differ in how the mouth and body follow
+// speech versus a sung vocal.
+const R2V_PROMPT_PRESETS = {
+  SPEAK: "<Picture 1> is the subject, exactly as shown: identical features, colouring and markings, with nothing added, removed or restyled. The subject speaks the words in <Audio 1>, the mouth shaping each syllable as it is said, with natural pauses between sentences. The body makes small natural shifts, but the head stays steady so the mouth reads clearly: all movement is small and natural, never large or sudden. The setting stays exactly as <Picture 1> shows it: Light, colour and background hold steady for the whole shot, nothing else enters the frame, and the face stays fully visible throughout.",
+  SING: "<Picture 1> is the subject, exactly as shown: identical features, colouring and markings, with nothing added, removed or restyled. The subject performs the vocal in <Audio 1>, the mouth shaping each word as it is sung, opening wider on held notes and closing between phrases. The body moves in time with the music, matching its energy, but the head stays steady so the mouth reads clearly: all movement is small and natural, never large or sudden. The setting stays exactly as <Picture 1> shows it: Light, colour and background hold steady for the whole shot, nothing else enters the frame, and the face stays fully visible throughout.",
+};
 
 const LS_KEY = "xflow_one_minimax_h3_state";
 const DEFAULT_NEG_PROMPT = "low quality, deformed, blurry, watermark, ugly, bad anatomy, disfigured, mutated, extra limbs, poorly drawn face, bad proportions";
@@ -202,6 +210,59 @@ const mk = (tag, css = {}, props = {}) => {
 const tx = (e, t) => {
   e.textContent = t;
   return e;
+};
+
+// ── SEVEN-SEGMENT RENDERER ────────────────────────────────────────────────
+// Drawn rather than typed: a real LCD face needs the unlit segments ghosted
+// behind the lit ones, and shipping a font file would mean an external asset.
+const SEG_W = 22, SEG_H = 40, SEG_T = 5, SEG_GAP = 6;
+// Hexagonal caps, so neighbouring segments meet on a mitre like the real thing.
+const segH = (x, y) => `${x + SEG_T / 2},${y} ${x + SEG_W - SEG_T / 2},${y} ${x + SEG_W},${y + SEG_T / 2} ${x + SEG_W - SEG_T / 2},${y + SEG_T} ${x + SEG_T / 2},${y + SEG_T} ${x},${y + SEG_T / 2}`;
+const segV = (x, y) => {
+  const L = SEG_H / 2;
+  return `${x},${y + SEG_T / 2} ${x + SEG_T / 2},${y} ${x + SEG_T},${y + SEG_T / 2} ${x + SEG_T},${y + L - SEG_T / 2} ${x + SEG_T / 2},${y + L} ${x},${y + L - SEG_T / 2}`;
+};
+const SEG_SHAPES = {
+  A: () => segH(0, 0),
+  B: () => segV(SEG_W - SEG_T, 0),
+  C: () => segV(SEG_W - SEG_T, SEG_H / 2),
+  D: () => segH(0, SEG_H - SEG_T),
+  E: () => segV(0, SEG_H / 2),
+  F: () => segV(0, 0),
+  G: () => segH(0, (SEG_H - SEG_T) / 2),
+};
+const SEG_DIGITS = {
+  "0": "ABCDEF", "1": "BC", "2": "ABGED", "3": "ABGCD", "4": "FGBC",
+  "5": "AFGCD", "6": "AFGEDC", "7": "ABC", "8": "ABCDEFG", "9": "ABCDFG",
+};
+
+// Builds the markup for one string. Digits get segments; the unit letters and
+// the colon are drawn alongside so the whole readout stays one glyph system.
+const sevenSegSvg = (text, lit, dim) => {
+  let x = 0;
+  const parts = [];
+  for (const ch of text) {
+    if (ch === " ") { x += SEG_W * 0.45; continue; }
+    if (SEG_DIGITS[ch]) {
+      const on = SEG_DIGITS[ch];
+      const g = [];
+      for (const key of "ABCDEFG") {
+        const isOn = on.includes(key);
+        g.push(`<polygon points="${SEG_SHAPES[key]()}" fill="${isOn ? lit : dim}"/>`);
+      }
+      parts.push(`<g transform="translate(${x},0)">${g.join("")}</g>`);
+      x += SEG_W + SEG_GAP;
+    } else if (ch === ":") {
+      const s = SEG_T * 0.9;
+      parts.push(`<g transform="translate(${x},0)"><rect x="0" y="${SEG_H * 0.30}" width="${s}" height="${s}" rx="1" fill="${lit}"/><rect x="0" y="${SEG_H * 0.62}" width="${s}" height="${s}" rx="1" fill="${lit}"/></g>`);
+      x += s + SEG_GAP;
+    } else {
+      // Unit letters: no clean seven-segment form, so set them as small caps.
+      parts.push(`<text x="${x}" y="${SEG_H - SEG_T}" fill="${lit}" font-family="ui-monospace, Menlo, monospace" font-size="${SEG_H * 0.42}" font-weight="700">${ch}</text>`);
+      x += SEG_H * 0.30 + SEG_GAP;
+    }
+  }
+  return `<svg width="${x}" height="${SEG_H}" viewBox="0 0 ${x} ${SEG_H}" xmlns="http://www.w3.org/2000/svg" style="overflow:visible">${parts.join("")}</svg>`;
 };
 const cap = (t) =>
   tx(
@@ -574,6 +635,32 @@ async function audioBufferToWavBlob(audioBuffer, startTime, endTime) {
     ::-webkit-scrollbar-thumb:hover,
     *::-webkit-scrollbar-thumb:hover {
       background: #00ff66 !important;
+    }
+    /* Generate button while a run is in flight: a firefly glow that swells and
+       dips on uneven beats, so it reads as alive rather than as a metronome. */
+    @keyframes fk-firefly {
+      0%   { box-shadow: 0 2px 8px rgba(0, 255, 102, 0.16); filter: brightness(1); }
+      18%  { box-shadow: 0 2px 13px rgba(0, 255, 102, 0.40), 0 0 17px 4px rgba(0, 255, 102, 0.20); filter: brightness(1.08); }
+      34%  { box-shadow: 0 2px 7px rgba(0, 255, 102, 0.14); filter: brightness(1.00); }
+      52%  { box-shadow: 0 2px 10px rgba(0, 255, 102, 0.30), 0 0 11px 2px rgba(0, 255, 102, 0.14); filter: brightness(1.04); }
+      66%  { box-shadow: 0 2px 6px rgba(0, 255, 102, 0.12); filter: brightness(1); }
+      82%  { box-shadow: 0 2px 15px rgba(0, 255, 102, 0.45), 0 0 20px 6px rgba(0, 255, 102, 0.24); filter: brightness(1.10); }
+      100% { box-shadow: 0 2px 8px rgba(0, 255, 102, 0.16); filter: brightness(1); }
+    }
+    .fk-gen-busy {
+      animation: fk-firefly 2.6s ease-in-out infinite;
+    }
+    /* The sparkle next to "Generating..." - spins while the run is in flight. */
+    @keyframes fk-spin {
+      from { transform: rotate(0deg); }
+      to   { transform: rotate(360deg); }
+    }
+    .fk-spin {
+      animation: fk-spin 1.8s linear infinite;
+      transform-origin: 50% 50%;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .fk-gen-busy { animation: none; box-shadow: 0 2px 11px rgba(0, 255, 102, 0.3); }
     }
   `;
   document.head.appendChild(styleEl);
@@ -1067,8 +1154,13 @@ app.registerExtension({
       // Root Element (Matching Image 2 1:1 with visible header top bar)
       const root = mk("div", {
         className: "fk-root",
-        width: `${NODE_W}px`,
-        height: `${NODE_H}px`,
+        // Fill the slot ComfyUI hands the DOM widget rather than assuming it is
+        // the full node width: the slot is inset by a margin each side, so a
+        // hard NODE_W here hung the panel past the node's right edge. Height
+        // then comes from the width, which is what keeps the panel at 16:9 -
+        // the slot itself sizes to content and cannot be relied on.
+        width: "100%",
+        aspectRatio: "16 / 9",
         background: C.bg0,
         borderRadius: "12px",
         border: `1px solid ${C.border}`,
@@ -1246,9 +1338,10 @@ app.registerExtension({
         fsBtn.style.background = on ? LIME : C.bg2;
         fsBtn.style.color = on ? "#111" : LIME;
         fsBtn.style.borderColor = LIME;
-        // The node is a fixed-size box on the graph; fullscreen has to fill.
-        root.style.width = on ? "100vw" : `${NODE_W}px`;
-        root.style.height = on ? "100vh" : `${NODE_H}px`;
+        // Fullscreen fills the viewport, so the 16:9 lock has to come off.
+        root.style.width = on ? "100vw" : "100%";
+        root.style.height = on ? "100vh" : "";
+        root.style.aspectRatio = on ? "auto" : "16 / 9";
         root.style.borderRadius = on ? "0" : "12px";
         root.style.border = on ? "none" : `1px solid ${C.border}`;
       };
@@ -2440,9 +2533,13 @@ app.registerExtension({
       const singIcon = svgIcon("music", 13, C.text);
       singBtn.append(singIcon, document.createTextNode("SING"));
 
+      // Assigned once the prompt box exists, further down.
+      let applyR2vPreset = () => {};
+
       const updateR2vSwitch = (type) => {
         S.r2v_type = type === "SING" ? "SING" : "SPEAK";
         persist();
+        applyR2vPreset(S.r2v_type);
         if (S.r2v_type === "SPEAK") {
           speakBtn.style.background = LIME;
           speakBtn.style.color = "#111";
@@ -2866,7 +2963,8 @@ app.registerExtension({
         fontWeight: "900",
         cursor: "pointer",
         letterSpacing: ".03em",
-        boxShadow: "0 4px 14px rgba(0, 255, 102, 0.3)",
+        // Idle sits flat - the glow is what marks a run in progress.
+        boxShadow: "0 2px 8px rgba(0, 255, 102, 0.15)",
         transition: "all .2s ease",
         display: "inline-flex",
         alignItems: "center",
@@ -2876,23 +2974,36 @@ app.registerExtension({
       genBtn.appendChild(svgIcon("play", 16, "#111"));
       genBtn.appendChild(document.createTextNode("Generate"));
 
-      const chimeBtn = mk("button", {
+      // Stop button. Inert unless a run of ours is in flight, so it can never
+      // interrupt somebody else's queue item from an idle node.
+      const stopBtn = mk("button", {
         width: "46px",
         height: "46px",
         background: C.bg2,
-        color: LIME,
         border: `1px solid ${C.border}`,
         borderRadius: "8px",
         fontSize: "14px",
-        cursor: "pointer",
+        cursor: "not-allowed",
+        opacity: "0.45",
         display: "inline-flex",
         alignItems: "center",
         justifyContent: "center",
-      });
-      chimeBtn.appendChild(svgIcon("sound", 16, LIME));
-      chimeBtn.onclick = () => playDone();
+        transition: "all .15s ease",
+      }, { title: "Stop generation", disabled: true });
+      const stopIcon = svgIcon("close", 18, C.err);
+      stopBtn.appendChild(stopIcon);
 
-      genBtnGroup.append(genBtn, chimeBtn);
+      const setStopEnabled = (on) => {
+        stopBtn.disabled = !on;
+        stopBtn.style.cursor = on ? "pointer" : "not-allowed";
+        stopBtn.style.opacity = on ? "1" : "0.45";
+        stopBtn.style.borderColor = on ? C.err : C.border;
+        stopBtn.style.background = on ? "rgba(255, 68, 68, 0.10)" : C.bg2;
+        stopIcon.setAttribute("stroke", on ? C.err : C.muted);
+      };
+      setStopEnabled(false);
+
+      genBtnGroup.append(genBtn, stopBtn);
       leftCol.appendChild(genBtnGroup);
 
       // Cards in the scrolling column must keep their natural height. As flex
@@ -2958,6 +3069,104 @@ app.registerExtension({
       
       placeholder.append(camIconWrap, mk("div", { fontSize: "12px", fontWeight: "600", color: C.text }, { textContent: "Generated video will appear here" }));
       rightCol.appendChild(placeholder);
+
+      // ── GENERATION TIMER ────────────────────────────────────────────────
+      // Sits just under the placeholder caption, but lives outside it: the
+      // placeholder is hidden the moment the clip loads, and the finished time
+      // has to survive that to be read.
+      const genTimerLabel = mk("div", {
+        position: "absolute",
+        left: "0",
+        right: "0",
+        top: "calc(50% + 58px)",
+        textAlign: "center",
+        lineHeight: "0",
+        // Hard black shadow first so the readout keeps its edge over a bright
+        // frame, then the lime bloom on top.
+        filter: "drop-shadow(0 0 2px #000) drop-shadow(0 2px 4px rgba(0,0,0,0.95)) drop-shadow(0 0 12px rgba(0,255,102,0.45))",
+        display: "none",
+        opacity: "1",
+        transition: "opacity .5s ease",
+        pointerEvents: "none",
+      });
+      rightCol.appendChild(genTimerLabel);
+
+      let genTimerId = null;
+      let genTimerFadeId = null;
+      let genTimerStart = 0;
+      // True while the code (not the user) starts playback, so the autoplay that
+      // follows a finished run does not wipe the time before it can be read.
+      let genTimerIgnorePlay = false;
+
+      // Unlit segments sit at low alpha behind the lit ones, the way an LCD
+      // shows its whole grid faintly.
+      const SEG_DIM = "rgba(0, 255, 102, 0.13)";
+      const paintTimer = (ms) => {
+        genTimerLabel.innerHTML = sevenSegSvg(fmtElapsed(ms), LIME, SEG_DIM);
+      };
+
+      const fmtElapsed = (ms) => {
+        const total = Math.max(0, Math.floor(ms / 1000));
+        const mm = String(Math.floor(total / 60)).padStart(2, "0");
+        const ss = String(total % 60).padStart(2, "0");
+        return `${mm}m : ${ss}s`;
+      };
+
+      const startGenTimer = () => {
+        genTimerStart = Date.now();
+        paintTimer(0);
+        genTimerLabel.style.opacity = "1";
+        genTimerLabel.style.display = "block";
+        clearTimeout(genTimerFadeId);
+        clearInterval(genTimerId);
+        genTimerId = setInterval(() => {
+          paintTimer(Date.now() - genTimerStart);
+        }, 250);
+      };
+
+      const stopGenTimer = () => {
+        // Freeze on the first call only. Completion can arrive from both the
+        // websocket and the /history poll, and recomputing on the second one
+        // nudged the total a second past what the run actually took.
+        if (!genTimerId) return;
+        clearInterval(genTimerId);
+        genTimerId = null;
+        if (genTimerStart) paintTimer(Date.now() - genTimerStart);
+        // The clip autoplays the moment it lands, so the total gets just long
+        // enough to be read before it clears itself off the picture.
+        clearTimeout(genTimerFadeId);
+        genTimerFadeId = setTimeout(() => {
+          genTimerLabel.style.opacity = "0";
+          genTimerFadeId = setTimeout(hideGenTimer, 500);
+        }, 3000);
+      };
+
+      const hideGenTimer = () => {
+        clearInterval(genTimerId);
+        genTimerId = null;
+        clearTimeout(genTimerFadeId);
+        genTimerFadeId = null;
+        genTimerStart = 0;
+        genTimerLabel.style.display = "none";
+        genTimerLabel.style.opacity = "1";
+      };
+
+      // Only a deliberate press clears the time early; the load-and-autoplay that
+      // follows a finished run is ours, and the flag stays up until the user
+      // touches the transport.
+      videoPlayer.addEventListener("play", () => {
+        if (genTimerIgnorePlay) return;
+        hideGenTimer();
+      });
+      videoPlayer.addEventListener("seeking", () => {
+        if (genTimerIgnorePlay) return;
+        hideGenTimer();
+      });
+      // A real click on the player is unambiguous - drop the shield and clear.
+      videoPlayer.addEventListener("pointerdown", () => {
+        genTimerIgnorePlay = false;
+        hideGenTimer();
+      });
 
       // Status progress bar at bottom of video box
       const statusRow = mk("div", {
@@ -3027,13 +3236,46 @@ app.registerExtension({
       const promptLabel = cap("PROMPT");
       promptLabel.style.marginBottom = "0";
 
+      // Prompt-writing helper GPTs. R2V is a different model brief, so it gets
+      // its own assistant; T2V and I2V share one.
+      const GPT_PROMPT_URLS = {
+        R2V: "https://chatgpt.com/g/g-6a71f08838cc8191994ae82634d5c4e4-h3-reference-model-prompts",
+        DEFAULT: "https://chatgpt.com/g/g-6a70726c663c81919ff3199d41c73f0e-minimax-h3-prompts",
+      };
+
+      // Styled like the Setup button in the top bar.
+      const gptPromptBtn = mk("button", {
+        padding: "6px 12px", fontSize: "11px", fontWeight: "700",
+        background: C.bg2, color: LIME, border: `1px solid ${LIME}`, borderRadius: "6px",
+        cursor: "pointer", outline: "none",
+        display: "inline-flex", alignItems: "center", gap: "6px"
+      }, { title: "Open the prompt-writing GPT for this mode" });
+      gptPromptBtn.appendChild(svgIcon("link", 12, LIME));
+      gptPromptBtn.appendChild(document.createTextNode("GPT Prompt"));
+      gptPromptBtn.onclick = (e) => {
+        e.stopPropagation();
+        const url = S.mode === "R2V" ? GPT_PROMPT_URLS.R2V : GPT_PROMPT_URLS.DEFAULT;
+        window.open(url, "_blank", "noopener,noreferrer");
+      };
+
+      // Was the "Director" button. The negative prompt still needs a way in.
       const negToggleBtn = mk("button", {
         background: "transparent", border: "none", color: C.muted, fontSize: "10px",
         fontWeight: "700", cursor: "pointer", outline: "none", letterSpacing: ".05em",
         display: "inline-flex", alignItems: "center", gap: "4px"
-      });
-      negToggleBtn.appendChild(svgIcon("director", 11, C.muted));
-      negToggleBtn.appendChild(document.createTextNode("Director"));
+      }, { title: "Negative prompt" });
+      // R2V only - the presets it restores are meaningless in the other modes.
+      const resetPromptBtn = mk("button", {
+        background: "transparent", border: "none", color: C.muted, fontSize: "10px",
+        fontWeight: "700", cursor: "pointer", outline: "none", letterSpacing: ".05em",
+        display: "none", alignItems: "center", gap: "4px"
+      }, { title: "Restore the default R2V prompt for the current mode" });
+      resetPromptBtn.appendChild(svgIcon("random", 11, C.muted));
+      resetPromptBtn.appendChild(document.createTextNode("Reset"));
+
+      const negChevron = svgIcon("chevronDown", 11, C.muted);
+      negChevron.style.transition = "transform 0.2s ease";
+      negToggleBtn.append(negChevron, document.createTextNode("Negative prompt"));
 
       const promptHdrSpacer = mk("div", { flex: "1" });
 
@@ -3067,7 +3309,7 @@ app.registerExtension({
       const expTxt = document.createTextNode("Expand");
       expandBtn.appendChild(expTxt);
 
-      promptHdr.append(promptLabel, negToggleBtn, promptHdrSpacer, addLoraBtn, expandBtn);
+      promptHdr.append(gptPromptBtn, promptLabel, negToggleBtn, resetPromptBtn, promptHdrSpacer, addLoraBtn, expandBtn);
 
       // Collapsible LoRA Manager Drawer
       const loraDrawer = mk("div", {
@@ -3181,6 +3423,42 @@ app.registerExtension({
       promptTA.value = S.prompt;
       promptTA.oninput = () => { S.prompt = promptTA.value; persist(); };
 
+      // Fills the prompt when entering R2V and swaps it when toggling
+      // SPEAK/SING. Anything the user typed themselves is left alone - only an
+      // empty box or the other preset is replaced.
+      applyR2vPreset = (type) => {
+        const preset = R2V_PROMPT_PRESETS[type] || R2V_PROMPT_PRESETS.SPEAK;
+        const current = (promptTA.value || "").trim();
+        const replaceable =
+          current === "" ||
+          current === R2V_PROMPT_PRESETS.SPEAK ||
+          current === R2V_PROMPT_PRESETS.SING;
+        if (!replaceable || current === preset) return;
+        promptTA.value = preset;
+        S.prompt = preset;
+        persist();
+      };
+
+      // Leaving R2V takes the preset with it - it is written for a reference
+      // image and an audio track, neither of which T2V or I2V has. Text the user
+      // wrote themselves stays put.
+      const clearR2vPreset = () => {
+        const current = (promptTA.value || "").trim();
+        if (current !== R2V_PROMPT_PRESETS.SPEAK && current !== R2V_PROMPT_PRESETS.SING) return;
+        promptTA.value = "";
+        S.prompt = "";
+        persist();
+      };
+
+      // Deliberate restore, so a preset deleted by accident is one click back.
+      const resetPromptToPreset = () => {
+        const preset = R2V_PROMPT_PRESETS[S.r2v_type === "SING" ? "SING" : "SPEAK"];
+        promptTA.value = preset;
+        S.prompt = preset;
+        persist();
+      };
+      resetPromptBtn.onclick = (e) => { e.stopPropagation(); resetPromptToPreset(); };
+
       let promptExpanded = false;
       expandBtn.onclick = () => {
         promptExpanded = !promptExpanded;
@@ -3203,7 +3481,8 @@ app.registerExtension({
       negToggleBtn.onclick = () => {
         negOpen = !negOpen;
         negCollapse.style.display = negOpen ? "block" : "none";
-        negToggleBtn.style.color = negOpen ? LIME : C.muted;
+        // Open state shows in the chevron only - the label keeps its colour.
+        negChevron.style.transform = negOpen ? "rotate(180deg)" : "rotate(0deg)";
       };
 
       promptSection.append(promptHdr, loraDrawer, promptTA, negCollapse);
@@ -4627,6 +4906,10 @@ app.registerExtension({
           pillObj.iconEl.setAttribute("stroke", isActive ? "#111" : C.text);
         });
 
+        // The R2V presets belong to R2V only.
+        if (m !== "R2V") clearR2vPreset();
+        resetPromptBtn.style.display = m === "R2V" ? "inline-flex" : "none";
+
         if (m === "T2V") {
           orientSizeBox.style.display = "flex";
           longestSideBox.style.display = "none";
@@ -4684,8 +4967,13 @@ app.registerExtension({
         }
 
         genBtn.disabled = true;
+        genBtn.classList.add("fk-gen-busy");
+        startGenTimer();
+        setStopEnabled(true);
         genBtn.innerHTML = "";
-        genBtn.appendChild(svgIcon("sparkle", 16, "#111"));
+        const busyIcon = svgIcon("sparkle", 16, "#111");
+        busyIcon.classList.add("fk-spin");
+        genBtn.appendChild(busyIcon);
         genBtn.appendChild(document.createTextNode("Generating..."));
 
         statusRow.style.display = "flex";
@@ -4719,10 +5007,8 @@ app.registerExtension({
           pollRunUntilDone(activePromptId);
         } catch (err) {
           ourRunActive = false;
-          genBtn.disabled = false;
-          genBtn.innerHTML = "";
-          genBtn.appendChild(svgIcon("play", 16, "#111"));
-          genBtn.appendChild(document.createTextNode("Generate"));
+          hideGenTimer();
+          resetGenerateButton();
 
           tx(statusLabel, `Error: ${err.message}`);
           statusLabel.style.color = C.err;
@@ -4732,10 +5018,8 @@ app.registerExtension({
       const handleExecutionError = (e) => {
         if (!isOurs(e && e.detail)) return;
         ourRunActive = false;
-        genBtn.disabled = false;
-        genBtn.innerHTML = "";
-        genBtn.appendChild(svgIcon("play", 16, "#111"));
-        genBtn.appendChild(document.createTextNode("Generate"));
+        hideGenTimer();
+        resetGenerateButton();
 
         statusRow.style.display = "flex";
         let detailMsg = "Execution failed";
@@ -4796,6 +5080,10 @@ app.registerExtension({
 
         placeholder.style.display = "none";
         videoPlayer.style.display = "block";
+        // Set before touching src: the element carries the autoplay property, so
+        // load() alone can fire play/seeking - and those arriving before the flag
+        // was raised is what wiped the finished time on sight.
+        genTimerIgnorePlay = true;
         videoPlayer.src = url;
         videoPlayer.load();
         videoPlayer.play().catch(() => {});
@@ -4834,9 +5122,40 @@ app.registerExtension({
 
       const resetGenerateButton = () => {
         genBtn.disabled = false;
+        genBtn.classList.remove("fk-gen-busy");
         genBtn.innerHTML = "";
         genBtn.appendChild(svgIcon("play", 16, "#111"));
         genBtn.appendChild(document.createTextNode("Generate"));
+        setStopEnabled(false);
+      };
+
+      // A prompt that has not started yet lives in the queue, where /interrupt
+      // does not reach it - that one has to be deleted by id. Do both, since
+      // which state it is in is a race.
+      stopBtn.onclick = async (e) => {
+        e.stopPropagation();
+        if (stopBtn.disabled || !ourRunActive) return;
+        const pid = activePromptId;
+        ourRunActive = false;
+        setStopEnabled(false);
+        tx(statusLabel, "Stopping...");
+        statusLabel.style.color = C.muted;
+        try {
+          if (pid) {
+            await api.fetchApi("/queue", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ delete: [pid] }),
+            }).catch(() => {});
+          }
+          await api.fetchApi("/interrupt", { method: "POST" }).catch(() => {});
+        } catch (err) { /* stopping is best effort */ }
+        activePromptId = null;
+        hideGenTimer();
+        resetGenerateButton();
+        progressBarInner.style.width = "0%";
+        tx(statusLabel, "Generation stopped");
+        statusLabel.style.color = C.err;
       };
 
       // Record what produced the clip, so Gallery cards can show it later.
@@ -4866,6 +5185,7 @@ app.registerExtension({
         if (!ourRunActive) return;   // already finished by whichever got here first
         ourRunActive = false;
         resetGenerateButton();
+        stopGenTimer();   // freeze on the total; it clears when playback starts
 
         tx(statusLabel, S.autoSave ? "Generation Complete - saved to Gallery" : "Generation Complete!");
         statusLabel.style.color = LIME;
@@ -4903,6 +5223,7 @@ app.registerExtension({
             const status = entry.status || {};
             if (status.status_str === "error") {
               ourRunActive = false;
+              hideGenTimer();
               resetGenerateButton();
               const msgs = (status.messages || [])
                 .filter(msg => msg[0] === "execution_error")
