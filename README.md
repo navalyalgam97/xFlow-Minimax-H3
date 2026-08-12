@@ -3,7 +3,7 @@
 <div align="center">
 
 ![xFlowOne Banner](https://img.shields.io/badge/xFlowOne-Minimax_H3-00ff66?style=for-the-badge&logo=comfyui&logoColor=black)
-![Version](https://img.shields.io/badge/version-1.7.0-00ff66?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.9.0-00ff66?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
 
 *A single-node, 1:1 `xFlowOne` design system UI for Minimax H3 Video Generation in ComfyUI V2.*
@@ -62,7 +62,19 @@ All required models can be managed and downloaded automatically via the built-in
 
 ## 📜 Changelog
 
-### Version 1.8.0 (Latest Release)
+### Version 1.9.0 (Latest Release)
+
+> Interface release: gallery rework, fullscreen mode, and a 16:9 node.
+
+- 🖼️ **Gallery Thumbnail Grid**: Dense square tiles with the filename overlaid; hover previews the clip in place. Clicking a tile opens it **full view inside the node**, with a **Download** button so a cloud or remote ComfyUI can hand the file to your local machine.
+- ⛶ **Fullscreen Mode**: Icon toggle at the right of the top bar, native Fullscreen API with a viewport-pinned fallback for embedded browsers. Esc exits.
+- 📐 **Fixed 16:9 Node**: `1360 × 765`.
+- 🔢 **`SIZE TABS` / `SHAPE CHIPS` Single-Select**: One size, one shape — and that choice is the resolution generated and the ratio cropped to. 1.8.0's five-at-once curation read as a broken radio group. Off-list picks swap onto the node row so the selection stays visible.
+- 🐛 **`ROUND SIZES TO → Off` Now Sticks**: `Off` is `0` and was being read through `||`, so it snapped back to `x32`. Display only — the value was always sent correctly.
+- 🐛 **SEED Reachable In I2V / R2V**: The left column's scroll area could not shrink and the Advanced Options card clipped its own tail, hiding SEED.
+- 💅 **Settings Panel & Help Drawer**: Centred 880px settings panel with uniform rows; content-sized social buttons; installed version in the bottom-right corner.
+
+### Version 1.8.0
 
 > Bug-fix release. Before this, **R2V (Reference + Audio) and I2V never used your reference image or audio** — both silently ran the text-to-video workflow. If you are on 1.7.0 or earlier, upgrade.
 

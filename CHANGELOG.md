@@ -2,6 +2,29 @@
 
 All notable changes to the **xFlowOne · Minimax H3** single-node video interface for ComfyUI.
 
+## [1.9.0] - 2026-08-12
+
+### 🖼️ Gallery Rework, Fullscreen Mode, 16:9 Node, Settings Panel Fixes
+
+- **🖼️ Gallery Thumbnail Grid**:
+  - Replaced the padded video cards with a dense grid of square, edge-to-edge tiles. The filename is a translucent caption bar across the bottom of each tile; hovering previews the clip in place and reveals a corner delete button.
+  - Clicking a tile opens it **full view inside the node** — scaled to fill, aspect ratio preserved, with native controls. Closing returns to the grid, and the tile you opened keeps a lime outline.
+  - The full-view header carries a **Download** button (`<a download>` against the node's own `video_file` route), so a ComfyUI running on a remote or cloud box can hand the clip to the user's local machine. "Open Output Folder" only ever opened a folder on the server.
+- **⛶ Fullscreen Mode**:
+  - Icon-only toggle at the right of the node's top bar. Uses the native Fullscreen API, falling back to a viewport-pinned overlay where the browser refuses the request (embedded webviews, restricted hosts). Esc exits either path.
+  - The element is parked on `<body>` for the fallback: litegraph transforms the widget's ancestors every frame, and a transformed ancestor makes `position: fixed` resolve against it rather than the viewport.
+  - ComfyUI's DOM-widget pass sets `display: none` once the element stops matching a node on the canvas — a `MutationObserver` puts it back while the node owns the element, in both the native and fallback paths.
+- **📐 Node Is Now A Fixed 16:9** — `1360 × 765`. Widened rather than shortened so the left control column still fits without reflowing.
+- **🔢 `SIZE TABS` / `SHAPE CHIPS` Are Single-Select Again**:
+  - 1.8.0 made these curate *which chips appear on the node face*, capped at five. Five lit buttons read as a broken radio group, so they are back to choosing one size and one shape — and that choice is the resolution the node generates and the ratio it crops to.
+  - Picking a value outside the five node-face defaults swaps it onto the row, so the selection is always visible on the node. `keep` still means uncropped, so a workflow that never opens this panel is unaffected.
+- **🐛 `ROUND SIZES TO → Off` Did Nothing** — `Off` is `0`, read back through `S.step_round || 32`, so it was written and instantly re-read as `32`. The selection snapped back and the node badge showed `x32`. Now `??`, and the badge reads `Off`. The value was always sent correctly; only the UI misreported it.
+- **🐛 SEED Unreachable In I2V / R2V** — two stacked flexbox faults. The left column's scroll area lacked `min-height: 0`, so as a flex item it never shrank below its content and `overflow-y` never engaged. Worse, its cards shrink by default: the Advanced Options accordion has `overflow: hidden`, so it was squeezed below its natural height and clipped its own tail. Cards are now pinned with `flex-shrink: 0` and the column scrolls.
+- **💅 Settings Panel Layout** — the Longest Side overlay is a centred 880px panel instead of controls stranded against the left edge of a 1360px node. Rows fill it uniformly, so every section shares the same left and right edges.
+- **💬 Help Drawer** — social buttons were `flex: 1` and stretched into banners; they are content-sized now. The Discord button reads "For support join Discord Server", the GitHub Repository button is gone, and the installed version sits quietly in the bottom-right corner.
+
+---
+
 ## [1.8.0] - 2026-08-11
 
 ### 🐛 Reference & Audio Generation Repaired, Gallery Auto-Save, Player Controls

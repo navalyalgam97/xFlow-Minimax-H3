@@ -32,8 +32,13 @@ const C = {
   accentOrange: "#ff6744"
 };
 
-const NODE_W = 980;
-const NODE_H = 760;
+// Keep in step with CHANGELOG.md - this is what the Help drawer reports.
+const NODE_VERSION = "1.9.0";
+
+// The node box is a fixed 16:9 (1360 x 765 is exactly 16:9). Widened rather
+// than shortened so the existing 760px-tall column still fits without scrolling.
+const NODE_W = 1360;
+const NODE_H = 765;
 
 const LS_KEY = "xflow_one_minimax_h3_state";
 const DEFAULT_NEG_PROMPT = "low quality, deformed, blurry, watermark, ugly, bad anatomy, disfigured, mutated, extra limbs, poorly drawn face, bad proportions";
@@ -1172,7 +1177,123 @@ app.registerExtension({
       helpBtn.appendChild(svgIcon("help", 13, C.text));
       helpBtn.appendChild(document.createTextNode("Help"));
 
-      topActions.append(galleryBtn, modelsBtn, helpBtn);
+      // ── FULLSCREEN TOGGLE ────────────────────────────────────────────────
+      // Native fullscreen on the node root rather than a fixed-position overlay:
+      // litegraph transforms the widget's ancestors every frame, and a transformed
+      // ancestor makes position:fixed resolve against it instead of the viewport.
+      const fsBtn = mk("button", {
+        padding: "6px 10px", fontSize: "11px", fontWeight: "700",
+        background: C.bg2, color: LIME, border: `1px solid ${LIME}`, borderRadius: "6px",
+        cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center"
+      }, { title: "Fullscreen" });
+      const fsIconSlot = mk("span", { display: "inline-flex" });
+      fsIconSlot.appendChild(svgIcon("expand", 13, LIME));
+      fsBtn.appendChild(fsIconSlot);
+
+      // Some embedders (and any page served without the fullscreen permission)
+      // reject requestFullscreen outright, so there is a second path: park the
+      // root on <body> and pin it to the viewport. Leaving the widget's subtree
+      // is what makes position:fixed honest again.
+      let fsFallbackOn = false;
+      let fsHome = null;
+      // ComfyUI's DOM-widget pass hides the element once it stops matching a node
+      // on the canvas, which is exactly what moving it to <body> looks like.
+      // Watch the style attribute and put display back while we own the element.
+      // Applies to native fullscreen too: once the canvas stops matching the node
+      // to a visible slot, the pass hides it and the screen just goes black.
+      const fsGuard = new MutationObserver(() => {
+        if (isNodeFullscreen() && root.style.display === "none") root.style.display = "flex";
+      });
+      const startFsGuard = () => fsGuard.observe(root, { attributes: true, attributeFilter: ["style"] });
+      const stopFsGuard = () => fsGuard.disconnect();
+
+      const isNodeFullscreen = () =>
+        fsFallbackOn || (document.fullscreenElement || document.webkitFullscreenElement) === root;
+
+      const enterFsFallback = () => {
+        if (fsFallbackOn) return;
+        fsHome = { parent: root.parentNode, next: root.nextSibling };
+        document.body.appendChild(root);
+        Object.assign(root.style, {
+          position: "fixed", top: "0", left: "0",
+          width: "100vw", height: "100vh", zIndex: "99999", display: "flex",
+        });
+        fsFallbackOn = true;
+        startFsGuard();
+        paintFsButton();
+      };
+
+      const exitFsFallback = () => {
+        if (!fsFallbackOn) return;
+        fsFallbackOn = false;
+        stopFsGuard();
+        Object.assign(root.style, { position: "relative", top: "", left: "", zIndex: "", display: "flex" });
+        if (fsHome && fsHome.parent) fsHome.parent.insertBefore(root, fsHome.next);
+        fsHome = null;
+        paintFsButton();
+      };
+
+      const onFsKey = (e) => {
+        if (e.key === "Escape" && fsFallbackOn) exitFsFallback();
+      };
+      document.addEventListener("keydown", onFsKey);
+
+      const paintFsButton = () => {
+        const on = isNodeFullscreen();
+        fsIconSlot.innerHTML = "";
+        fsIconSlot.appendChild(svgIcon(on ? "collapse" : "expand", 13, on ? "#111" : LIME));
+        fsBtn.title = on ? "Exit fullscreen (Esc)" : "Fullscreen";
+        fsBtn.style.background = on ? LIME : C.bg2;
+        fsBtn.style.color = on ? "#111" : LIME;
+        fsBtn.style.borderColor = LIME;
+        // The node is a fixed-size box on the graph; fullscreen has to fill.
+        root.style.width = on ? "100vw" : `${NODE_W}px`;
+        root.style.height = on ? "100vh" : `${NODE_H}px`;
+        root.style.borderRadius = on ? "0" : "12px";
+        root.style.border = on ? "none" : `1px solid ${C.border}`;
+      };
+
+      fsBtn.onclick = (e) => {
+        e.stopPropagation();
+        if (fsFallbackOn) { exitFsFallback(); return; }
+        if (document.fullscreenElement || document.webkitFullscreenElement) {
+          (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+          return;
+        }
+        const req = root.requestFullscreen || root.webkitRequestFullscreen;
+        if (!req) { enterFsFallback(); return; }
+        // Some hosts resolve the request but never give the element a real box.
+        // Check shortly after, and drop to the fallback if the node isn't showing.
+        const verify = () => setTimeout(() => {
+          if (fsFallbackOn) return;
+          const box = root.getBoundingClientRect();
+          if (box.width < 50 || box.height < 50) {
+            if (document.fullscreenElement || document.webkitFullscreenElement) {
+              (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+            }
+            enterFsFallback();
+          }
+        }, 350);
+        try {
+          const p = req.call(root);
+          if (p && p.then) p.then(verify, () => enterFsFallback());
+          else verify();
+        } catch (err) {
+          enterFsFallback();
+        }
+      };
+
+      // Fires for Esc and the browser's own exit too, not just our button.
+      const onFsChange = () => {
+        const native = (document.fullscreenElement || document.webkitFullscreenElement) === root;
+        if (native) startFsGuard();
+        else if (!fsFallbackOn) stopFsGuard();
+        paintFsButton();
+      };
+      document.addEventListener("fullscreenchange", onFsChange);
+      document.addEventListener("webkitfullscreenchange", onFsChange);
+
+      topActions.append(galleryBtn, modelsBtn, helpBtn, fsBtn);
       topBar.append(titleGroup, pillsContainer, topActions);
       pad.appendChild(topBar);
 
@@ -1298,12 +1419,12 @@ app.registerExtension({
       const secSocial = mk("div", { display: "flex", flexDirection: "column", gap: "6px" });
       secSocial.appendChild(cap("💬 JOIN COMMUNITY & SOCIAL LINKS"));
 
-      const socialRow = mk("div", { display: "flex", gap: "8px" });
+      const socialRow = mk("div", { display: "flex", gap: "8px", alignItems: "center" });
 
       // Discord Button with window.open()
       const discordBtn = mk("button", {
-        flex: "1",
-        padding: "8px 12px",
+        flex: "0 0 auto",
+        padding: "8px 16px",
         background: "#5865F2",
         color: "#ffffff",
         border: "none",
@@ -1319,41 +1440,28 @@ app.registerExtension({
         transition: "all 0.15s ease",
       });
       const discordIcon = svgIcon("discord", 15, "#ffffff");
-      discordBtn.append(discordIcon, document.createTextNode("Join Discord Server"));
+      discordBtn.append(discordIcon, document.createTextNode("For support join Discord Server"));
 
       discordBtn.onclick = (e) => {
         e.stopPropagation();
         window.open("https://discord.gg/dnfaGvcsE", "_blank");
       };
 
-      // GitHub Profile Button with window.open()
-      const githubBtn = mk("button", {
-        flex: "1",
-        padding: "8px 12px",
-        background: C.bg2,
-        color: "#ffffff",
-        border: `1px solid ${C.border}`,
-        borderRadius: "6px",
-        cursor: "pointer",
-        display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "8px",
-        fontSize: "11px",
-        fontWeight: "800",
-        transition: "all 0.15s ease",
-      });
-      const githubIcon = svgIcon("github", 15, "#ffffff");
-      githubBtn.append(githubIcon, document.createTextNode("GitHub Repository"));
-
-      githubBtn.onclick = (e) => {
-        e.stopPropagation();
-        window.open("https://github.com/navalyalgam97/xFlow-Minimax-H3", "_blank");
-      };
-
-      socialRow.append(discordBtn, githubBtn);
+      socialRow.append(discordBtn);
       secSocial.appendChild(socialRow);
       helpInlineDrawer.appendChild(secSocial);
+
+      // Version sits quietly in the bottom right corner of the drawer - a
+      // readout, so it is dimmed rather than competing with the lime accents.
+      const versionChip = mk("div", {
+        alignSelf: "flex-end",
+        marginTop: "2px",
+        fontSize: "10px",
+        fontWeight: "700",
+        letterSpacing: ".04em",
+        color: C.muted,
+      }, { textContent: `xFlow Minimax H3 v${NODE_VERSION}` });
+      helpInlineDrawer.appendChild(versionChip);
       pad.appendChild(helpInlineDrawer);
 
       // ── INLINE SETUP & MODELS MANAGER DRAWER PANEL (Embedded inside Node UI) ──
@@ -1473,6 +1581,7 @@ app.registerExtension({
         flexShrink: "0",
         boxSizing: "border-box",
         height: "100%",
+        minHeight: "0",
       });
 
       const leftScrollArea = mk("div", {
@@ -1480,6 +1589,10 @@ app.registerExtension({
         flexDirection: "column",
         gap: "10px",
         flex: "1",
+        // Without min-height:0 a flex child refuses to shrink below its content,
+        // so overflow-y never engages and the tail of the column (SEED, in I2V
+        // and R2V where the upload boxes push it down) is simply clipped.
+        minHeight: "0",
         overflowY: "auto",
         overflowX: "hidden",
         paddingRight: "4px",
@@ -1747,7 +1860,8 @@ app.registerExtension({
         padding: "2px 6px",
         borderRadius: "4px",
         boxShadow: "0 0 6px rgba(0, 255, 102, 0.4)",
-      }, { textContent: `x${S.step_round || 32}` });
+        // 0 means "Off", so ?? rather than || - otherwise Off reads as x32.
+      }, { textContent: (S.step_round ?? 32) === 0 ? "Off" : `x${S.step_round ?? 32}` });
 
       const lsGearBtnGroup = mk("div", { display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" });
       
@@ -2781,6 +2895,12 @@ app.registerExtension({
       genBtnGroup.append(genBtn, chimeBtn);
       leftCol.appendChild(genBtnGroup);
 
+      // Cards in the scrolling column must keep their natural height. As flex
+      // items they shrink by default, and the ones with overflow:hidden (the
+      // Advanced Options accordion) then clip their own tail - that is what hid
+      // the SEED box - while the column never grows tall enough to scroll.
+      [...leftScrollArea.children].forEach(card => { card.style.flexShrink = "0"; });
+
       mainRow.appendChild(leftCol);
 
       // RIGHT COLUMN (LARGE VIDEO PREVIEW BOX - Sleek Vector Camera Illustration)
@@ -3360,6 +3480,98 @@ app.registerExtension({
         openOverlay(imagePreviewOverlay);
       };
 
+      // ── FULLSCREEN VIDEO PREVIEW OVERLAY (Gallery tile click) ────────────────
+      // Sits above the gallery so closing it drops the user back on the grid.
+      const videoPreviewOverlay = mk("div", {
+        position: "absolute",
+        top: "0",
+        left: "0",
+        right: "0",
+        bottom: "0",
+        width: "100%",
+        height: "100%",
+        background: "rgba(10, 10, 10, 0.95)",
+        backdropFilter: "blur(10px)",
+        zIndex: "130",
+        display: "none",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+        boxSizing: "border-box",
+        borderRadius: "12px",
+        opacity: "0",
+        transform: "scale(0.96)",
+        transition: "opacity .22s ease, transform .22s ease",
+      });
+
+      const vidPrevHdr = mk("div", {
+        width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", gap: "8px"
+      });
+      const vidPrevTitle = mk("span", { fontSize: "13px", fontWeight: "800", color: LIME, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" });
+
+      const vidPrevActions = mk("div", { display: "flex", alignItems: "center", gap: "8px", flexShrink: "0" });
+
+      // An <a download> rather than a button: the browser saves the file to the
+      // user's own machine, which is what matters when ComfyUI runs on a remote
+      // or cloud box and "Open Output Folder" would open a folder they can't see.
+      const vidPrevDownloadBtn = mk("a", {
+        background: LIME, color: "#111", border: "none", borderRadius: "6px",
+        padding: "6px 14px", fontSize: "12px", fontWeight: "800", cursor: "pointer",
+        display: "inline-flex", alignItems: "center", gap: "6px",
+        textDecoration: "none",
+      });
+      vidPrevDownloadBtn.appendChild(svgIcon("download", 11, "#111"));
+      vidPrevDownloadBtn.appendChild(document.createTextNode("Download"));
+
+      const closeVidPrevBtn = mk("button", {
+        background: "#ff4444", color: "#fff", border: "none", borderRadius: "6px",
+        padding: "6px 16px", fontSize: "12px", fontWeight: "800", cursor: "pointer",
+        display: "inline-flex", alignItems: "center", gap: "6px", boxShadow: "0 2px 10px rgba(255, 68, 68, 0.4)"
+      });
+      closeVidPrevBtn.appendChild(svgIcon("close", 12, "#fff"));
+      closeVidPrevBtn.appendChild(document.createTextNode("Close"));
+
+      vidPrevActions.append(vidPrevDownloadBtn, closeVidPrevBtn);
+      vidPrevHdr.append(vidPrevTitle, vidPrevActions);
+
+      // Fills the overlay rather than sitting at native size, so short-side
+      // clips still read as "full view"; contain keeps the aspect ratio.
+      const vidPrevTag = mk("video", {
+        width: "100%",
+        height: "calc(100% - 60px)",
+        objectFit: "contain",
+        borderRadius: "8px",
+        border: `1px solid ${LIME}`,
+        boxShadow: "0 8px 32px rgba(0, 255, 102, 0.25)",
+        background: "#000",
+      }, { controls: true, loop: true, playsInline: true });
+
+      const closeVideoPreview = () => {
+        vidPrevTag.pause();
+        vidPrevTag.removeAttribute("src");
+        vidPrevTag.load();
+        closeOverlay(videoPreviewOverlay);
+      };
+      closeVidPrevBtn.onclick = (e) => {
+        e.stopPropagation();
+        closeVideoPreview();
+      };
+
+      videoPreviewOverlay.append(vidPrevHdr, vidPrevTag);
+      root.appendChild(videoPreviewOverlay);
+
+      const openVideoPreview = (src, title) => {
+        vidPrevTitle.textContent = title;
+        vidPrevTag.src = src;
+        vidPrevTag.load();
+        vidPrevDownloadBtn.href = src;
+        vidPrevDownloadBtn.download = title;
+        vidPrevDownloadBtn.title = `Download ${title}`;
+        openOverlay(videoPreviewOverlay);
+        vidPrevTag.play().catch(() => {});
+      };
+
       // ── GALLERY OVERLAY SYSTEM ──────────────────────────────────────────
       const galleryOverlay = mk("div", {
         position: "absolute",
@@ -3540,12 +3752,12 @@ app.registerExtension({
 
           // Hover previews the clip in place; clicking loads it into the player.
           card.onmouseenter = () => {
-            if (!selected) card.style.borderColor = C.border;
+            if (galSelected !== vid.filename) card.style.borderColor = C.border;
             delBtn.style.display = "flex";
             vidBox.play().catch(() => {});
           };
           card.onmouseleave = () => {
-            if (!selected) card.style.borderColor = "transparent";
+            card.style.borderColor = galSelected === vid.filename ? LIME : "transparent";
             delBtn.style.display = "none";
             vidBox.pause();
             vidBox.currentTime = 0;
@@ -3553,12 +3765,9 @@ app.registerExtension({
 
           card.onclick = () => {
             galSelected = vid.filename;
-            placeholder.style.display = "none";
-            videoPlayer.style.display = "block";
-            videoPlayer.src = vid.video_url;
-            videoPlayer.load();
-            videoPlayer.play().catch(() => {});
-            closeOverlay(galleryOverlay);
+            card.style.borderColor = LIME;
+            vidBox.pause();
+            openVideoPreview(vid.video_url, vid.filename);
           };
 
           card.append(vidBox, fnLabel, delBtn);
@@ -3604,7 +3813,12 @@ app.registerExtension({
         overflowY: "auto",
       });
 
-      const lsOverlayHeader = mk("div", { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexShrink: "0" });
+      const LS_PANEL_MAX = "880px";
+      const lsOverlayHeader = mk("div", {
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        marginBottom: "14px", flexShrink: "0",
+        width: "100%", maxWidth: LS_PANEL_MAX, margin: "0 auto 14px", boxSizing: "border-box",
+      });
       lsOverlayHeader.appendChild(cap("Longest Side settings"));
       
       // SLEEK MINIMAL BRIGHT RED CLOSE BUTTON (Matching Setup option 1:1)
@@ -3635,8 +3849,26 @@ app.registerExtension({
       lsOverlayHeader.appendChild(closeLsBtn);
       longestSideOverlay.appendChild(lsOverlayHeader);
 
-      const overlayBodyContainer = mk("div", { display: "flex", flexDirection: "column", gap: "10px", width: "100%", boxSizing: "border-box" });
+      // Centred panel with a sane measure. On a 1360px node the settings would
+      // otherwise sit hard against the left edge with half the overlay empty.
+      const overlayBodyContainer = mk("div", {
+        display: "flex", flexDirection: "column", gap: "10px",
+        width: "100%", maxWidth: LS_PANEL_MAX, margin: "0 auto", boxSizing: "border-box",
+      });
       longestSideOverlay.appendChild(overlayBodyContainer);
+
+      // The five shortcuts the node face shows by default. Picking something off
+      // that list from the overlay swaps it in, so the choice is always visible
+      // on the node without the row growing past five.
+      const DEFAULT_SIZE_TABS = [864, 1024, 1216, 1344, 1536];
+      const DEFAULT_SHAPE_CHIPS = ["keep", "1:1", "16:9", "9:16", "2:3"];
+      const rowWith = (defaults, chosen) =>
+        defaults.includes(chosen) ? defaults.slice() : [...defaults.slice(0, 4), chosen];
+
+      // Rows fill the centred panel rather than the whole 1360px node, so every
+      // section lines up on the same left and right edges.
+      const SETTINGS_ROW_MAX = "100%";
+      const SETTINGS_ROW_MAX_SM = "100%";
 
       const renderLongestSideOverlay = () => {
         overlayBodyContainer.innerHTML = "";
@@ -3644,9 +3876,9 @@ app.registerExtension({
         // Section 1: ROUND SIZES TO (Off, 8, 16, 32, 64)
         const sec1 = mk("div", { display: "flex", flexDirection: "column", gap: "4px", marginBottom: "12px" });
         sec1.appendChild(cap("ROUND SIZES TO"));
-        const roundGroup = mk("div", { display: "flex", gap: "6px" });
+        const roundGroup = mk("div", { display: "flex", gap: "6px", maxWidth: SETTINGS_ROW_MAX_SM });
         [0, 8, 16, 32, 64].forEach(val => {
-          const isSelected = (S.step_round || 32) === val;
+          const isSelected = (S.step_round ?? 32) === val;
           const btn = mk("button", {
             flex: "1", padding: "6px 0", fontSize: "11px", fontWeight: "800",
             borderRadius: "4px", border: `1px solid ${isSelected ? LIME : C.border}`,
@@ -3677,7 +3909,9 @@ app.registerExtension({
         const resetSizesBtn = mk("button", { background: "transparent", border: "none", color: C.muted, fontSize: "10px", fontWeight: "700", cursor: "pointer" }, { textContent: "reset" });
         resetSizesBtn.onclick = (e) => {
           e.stopPropagation();
-          S.active_size_tabs = [864, 1024, 1216, 1344, 1536];
+          S.longest_side = 1024;
+          S.active_size_tabs = DEFAULT_SIZE_TABS.slice();
+          lsTitleLbl.textContent = `${S.longest_side} long side`;
           persist();
           renderLsTabs();
           renderLongestSideOverlay();
@@ -3685,14 +3919,13 @@ app.registerExtension({
         sec2Hdr.appendChild(resetSizesBtn);
         sec2.appendChild(sec2Hdr);
 
-        // These buttons pick which sizes appear on the node face - they are NOT
-        // the chosen size. Selecting here used to overwrite S.longest_side, so
-        // curating the row silently changed the generated resolution.
+        // One size is chosen at a time, exactly like the row on the node face.
+        // The node row still shows five shortcuts, so picking a size that is not
+        // one of the defaults swaps it onto the row instead of hiding it.
         const ALL_SIZE_TABS = [864, 1024, 1216, 1344, 1536, 1728, 1920, 2048];
-        const MAX_ROW = 5;
-        const sizeTabsGrid = mk("div", { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "6px" });
+        const sizeTabsGrid = mk("div", { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "6px", maxWidth: SETTINGS_ROW_MAX_SM });
         ALL_SIZE_TABS.forEach(sizeVal => {
-          const active = (S.active_size_tabs || []).includes(sizeVal);
+          const active = S.longest_side === sizeVal;
           const btn = mk("button", {
             padding: "8px", fontSize: "12px", fontWeight: "800", borderRadius: "6px",
             border: `1px solid ${active ? LIME : C.border}`, background: active ? LIME : C.bg2,
@@ -3701,22 +3934,9 @@ app.registerExtension({
 
           btn.onclick = (e) => {
             e.stopPropagation();
-            const list = (S.active_size_tabs || []).slice();
-            const at = list.indexOf(sizeVal);
-            if (at >= 0) {
-              if (list.length <= 1) return;      // never empty the row
-              list.splice(at, 1);
-            } else {
-              if (list.length >= MAX_ROW) return; // row is full
-              list.push(sizeVal);
-              list.sort((a, b) => a - b);
-            }
-            S.active_size_tabs = list;
-            // Keep the chosen size on the row, otherwise nothing looks selected.
-            if (!list.includes(S.longest_side)) {
-              S.longest_side = list[0];
-              lsTitleLbl.textContent = `${list[0]} long side`;
-            }
+            S.longest_side = sizeVal;
+            S.active_size_tabs = rowWith(DEFAULT_SIZE_TABS, sizeVal).sort((a, b) => a - b);
+            lsTitleLbl.textContent = `${sizeVal} long side`;
             persist();
             renderLsTabs();
             renderLongestSideOverlay();
@@ -3725,9 +3945,7 @@ app.registerExtension({
         });
         sec2.appendChild(sizeTabsGrid);
         sec2.appendChild(mk("div", { fontSize: "10px", color: C.muted, marginTop: "2px" }, {
-          textContent: (S.active_size_tabs || []).length >= MAX_ROW
-            ? "The row is full. Click one that is on to take it off, then add another."
-            : "Pick up to 5 to show on the node. Choose the size itself on the node row."
+          textContent: `Long side of the picture. Currently ${S.longest_side}px.`
         }));
         overlayBodyContainer.appendChild(sec2);
 
@@ -3738,8 +3956,8 @@ app.registerExtension({
         const resetChipsBtn = mk("button", { background: "transparent", border: "none", color: C.muted, fontSize: "10px", fontWeight: "700", cursor: "pointer" }, { textContent: "reset" });
         resetChipsBtn.onclick = (e) => {
           e.stopPropagation();
-          S.active_shape_chips = ["keep", "1:1", "16:9", "9:16", "2:3"];
-          if (!S.active_shape_chips.includes(S.aspect_ratio)) S.aspect_ratio = "keep";
+          S.aspect_ratio = "keep";
+          S.active_shape_chips = DEFAULT_SHAPE_CHIPS.slice();
           persist();
           renderShapeChips();
           renderLongestSideOverlay();
@@ -3747,12 +3965,11 @@ app.registerExtension({
         sec3Hdr.appendChild(resetChipsBtn);
         sec3.appendChild(sec3Hdr);
 
-        // Same as SIZE TABS: this picks which shapes appear on the node face,
-        // it does not choose the ratio. Clicking here used to set S.aspect_ratio,
-        // which is how a "keep" workflow ended up cropping to 1:1.
-        const shapeGrid = mk("div", { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "6px" });
+        // Same as SIZE TABS: one shape at a time, and it is the ratio the node
+        // will actually use. "keep" means no crop, so it stays the reset value.
+        const shapeGrid = mk("div", { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "6px", maxWidth: SETTINGS_ROW_MAX });
         ["keep", "1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "5:4", "4:5", "21:9", "9:21", "2:1", "1:2"].forEach(chip => {
-          const active = (S.active_shape_chips || []).includes(chip);
+          const active = S.aspect_ratio === chip;
           const btn = mk("button", {
             padding: "6px 2px", fontSize: "10px", fontWeight: "700", borderRadius: "4px",
             border: `1px solid ${active ? LIME : C.border}`, background: active ? LIME : C.bg2,
@@ -3765,17 +3982,8 @@ app.registerExtension({
 
           btn.onclick = (e) => {
             e.stopPropagation();
-            const list = (S.active_shape_chips || []).slice();
-            const at = list.indexOf(chip);
-            if (at >= 0) {
-              if (list.length <= 1) return;
-              list.splice(at, 1);
-            } else {
-              if (list.length >= MAX_ROW) return;
-              list.push(chip);
-            }
-            S.active_shape_chips = list;
-            if (!list.includes(S.aspect_ratio)) S.aspect_ratio = list[0];
+            S.aspect_ratio = chip;
+            S.active_shape_chips = rowWith(DEFAULT_SHAPE_CHIPS, chip);
             persist();
             renderShapeChips();
             renderLongestSideOverlay();
@@ -3784,9 +3992,9 @@ app.registerExtension({
         });
         sec3.appendChild(shapeGrid);
         sec3.appendChild(mk("div", { fontSize: "10px", color: C.muted, marginTop: "2px" }, {
-          textContent: (S.active_shape_chips || []).length >= MAX_ROW
-            ? "The row is full. Click one that is on to take it off, then add another."
-            : "Pick up to 5 to show on the node. Choose the shape itself on the node row."
+          textContent: S.aspect_ratio === "keep"
+            ? "Shape of the picture. \"keep\" leaves it uncropped."
+            : `Shape of the picture. Currently ${S.aspect_ratio}.`
         }));
         overlayBodyContainer.appendChild(sec3);
 
@@ -3839,7 +4047,7 @@ app.registerExtension({
         // Section 5: RESAMPLE (auto, lanczos, bicubic, bilinear, nearest)
         const sec5 = mk("div", { display: "flex", flexDirection: "column", gap: "4px", marginBottom: "12px" });
         sec5.appendChild(cap("RESAMPLE"));
-        const resampleGroup = mk("div", { display: "flex", gap: "4px" });
+        const resampleGroup = mk("div", { display: "flex", gap: "4px", maxWidth: SETTINGS_ROW_MAX_SM });
         ["auto", "lanczos", "bicubic", "bilinear", "nearest"].forEach(resMode => {
           const isSelected = (S.resample_mode || "auto") === resMode;
           const btn = mk("button", {
@@ -4739,6 +4947,16 @@ app.registerExtension({
           return [NODE_W, NODE_H];
         },
       });
+
+      // Drop the document-level fullscreen listeners with the node.
+      const origOnRemoved = this.onRemoved;
+      this.onRemoved = function () {
+        exitFsFallback();   // never strand the root on <body>
+        document.removeEventListener("fullscreenchange", onFsChange);
+        document.removeEventListener("webkitfullscreenchange", onFsChange);
+        document.removeEventListener("keydown", onFsKey);
+        return origOnRemoved ? origOnRemoved.apply(this, arguments) : undefined;
+      };
     };
   },
 });
