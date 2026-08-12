@@ -3440,8 +3440,10 @@ app.registerExtension({
 
       const galGrid = mk("div", {
         display: "grid",
-        gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-        gap: "12px",
+        gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))",
+        gridAutoRows: "min-content",
+        alignContent: "start",
+        gap: "10px",
         flex: "1",
         overflowY: "auto",
         overflowX: "hidden",
@@ -3452,6 +3454,10 @@ app.registerExtension({
       galleryOverlay.appendChild(galGrid);
       root.appendChild(galleryOverlay);
 
+      // Filename of the clip most recently loaded from the gallery, so the tile
+      // it came from keeps a lime outline the next time the overlay opens.
+      let galSelected = null;
+
       const renderGalleryItems = (items) => {
         galGrid.innerHTML = "";
         if (!items || items.length === 0) {
@@ -3460,59 +3466,69 @@ app.registerExtension({
         }
 
         items.forEach(vid => {
+          const selected = vid.filename === galSelected;
+
           const card = mk("div", {
-            background: C.bg2,
-            borderRadius: "8px",
-            border: `1px solid ${C.border}`,
-            padding: "8px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "6px",
+            position: "relative",
+            aspectRatio: "1 / 1",
+            background: "#000",
+            borderRadius: "6px",
+            border: `2px solid ${selected ? LIME : "transparent"}`,
+            overflow: "hidden",
+            cursor: "pointer",
             boxSizing: "border-box",
           });
 
           const vidBox = mk("video", {
             width: "100%",
-            height: "130px",
+            height: "100%",
             objectFit: "cover",
-            borderRadius: "6px",
+            display: "block",
             background: "#000",
           }, {
             src: vid.video_url,
-            controls: true,
+            controls: false,
             loop: true,
             muted: true,
             playsInline: true,
+            preload: "metadata",
           });
 
-          const fnLabel = mk("div", { fontSize: "10px", fontWeight: "700", color: C.text, wordBreak: "break-all" }, { textContent: vid.filename });
-
-          const row = mk("div", { display: "flex", justifyContent: "space-between", alignItems: "center" });
-
-          const playBtn = mk("button", {
-            padding: "4px 8px", fontSize: "10px", fontWeight: "700",
-            background: LIME, color: "#111", border: "none", borderRadius: "4px", cursor: "pointer",
-            display: "inline-flex", alignItems: "center", gap: "4px"
-          });
-          playBtn.appendChild(svgIcon("play", 10, "#111"));
-          playBtn.appendChild(document.createTextNode("Load"));
-          playBtn.onclick = () => {
-            placeholder.style.display = "none";
-            videoPlayer.style.display = "block";
-            videoPlayer.src = vid.video_url;
-            videoPlayer.load();
-            videoPlayer.play().catch(() => {});
-            closeOverlay(galleryOverlay);
-          };
+          // Caption bar pinned to the bottom of the thumbnail.
+          const fnLabel = mk("div", {
+            position: "absolute",
+            left: "0",
+            right: "0",
+            bottom: "0",
+            padding: "4px 6px",
+            fontSize: "10px",
+            fontWeight: "700",
+            color: "#ffffff",
+            background: "rgba(0,0,0,0.62)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            pointerEvents: "none",
+          }, { textContent: vid.filename });
 
           const delBtn = mk("button", {
-            padding: "4px 8px", fontSize: "10px", fontWeight: "600",
-            background: C.bg1, color: C.err, border: `1px solid ${C.err}`, borderRadius: "4px", cursor: "pointer",
-            display: "inline-flex", alignItems: "center", gap: "4px"
-          });
-          delBtn.appendChild(svgIcon("trash", 10, C.err));
-          delBtn.appendChild(document.createTextNode("Delete"));
-          delBtn.onclick = async () => {
+            position: "absolute",
+            top: "6px",
+            right: "6px",
+            width: "22px",
+            height: "22px",
+            padding: "0",
+            background: "rgba(0,0,0,0.65)",
+            border: `1px solid ${C.err}`,
+            borderRadius: "4px",
+            cursor: "pointer",
+            display: "none",
+            alignItems: "center",
+            justifyContent: "center",
+          }, { title: `Delete ${vid.filename}` });
+          delBtn.appendChild(svgIcon("trash", 11, C.err));
+          delBtn.onclick = async (e) => {
+            e.stopPropagation();
             if (confirm(`Delete ${vid.filename}?`)) {
               await fetch("/minimax_h3/delete", {
                 method: "POST", headers: { "Content-Type": "application/json" },
@@ -3522,8 +3538,30 @@ app.registerExtension({
             }
           };
 
-          row.append(playBtn, delBtn);
-          card.append(vidBox, fnLabel, row);
+          // Hover previews the clip in place; clicking loads it into the player.
+          card.onmouseenter = () => {
+            if (!selected) card.style.borderColor = C.border;
+            delBtn.style.display = "flex";
+            vidBox.play().catch(() => {});
+          };
+          card.onmouseleave = () => {
+            if (!selected) card.style.borderColor = "transparent";
+            delBtn.style.display = "none";
+            vidBox.pause();
+            vidBox.currentTime = 0;
+          };
+
+          card.onclick = () => {
+            galSelected = vid.filename;
+            placeholder.style.display = "none";
+            videoPlayer.style.display = "block";
+            videoPlayer.src = vid.video_url;
+            videoPlayer.load();
+            videoPlayer.play().catch(() => {});
+            closeOverlay(galleryOverlay);
+          };
+
+          card.append(vidBox, fnLabel, delBtn);
           galGrid.appendChild(card);
         });
       };
