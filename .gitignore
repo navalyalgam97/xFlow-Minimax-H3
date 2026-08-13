@@ -38,3 +38,6 @@ ENV/
 # Zip artifacts & temporary files
 *.zip
 *.tmp
+
+# Claude Code local settings (machine-specific paths)
+.claude/

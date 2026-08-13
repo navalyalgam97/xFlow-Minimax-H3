@@ -1,8 +1,8 @@
 {
   "id": "c5beec59-2b88-4f3f-ba35-7640a58a9ba6",
   "revision": 0,
-  "last_node_id": 248,
-  "last_link_id": 309,
+  "last_node_id": 250,
+  "last_link_id": 312,
   "nodes": [
     {
       "id": 224,
@@ -456,14 +456,14 @@
           "name": "ref_images.ref_image_1",
           "shape": 7,
           "type": "IMAGE",
-          "link": null
+          "link": 310
         },
         {
           "label": "ref_video_0",
           "name": "ref_videos.ref_video_0",
           "shape": 7,
           "type": "IMAGE",
-          "link": null
+          "link": 311
         },
         {
           "label": "ref_video_audio_0",
@@ -477,7 +477,7 @@
           "name": "ref_audios.ref_audio_0",
           "shape": 7,
           "type": "AUDIO",
-          "link": 299
+          "link": 312
         },
         {
           "label": "ref_audio_1",
@@ -929,6 +929,183 @@
       ],
       "color": "#14436c",
       "bgcolor": "#2a2a2a"
+    },
+    {
+      "id": 249,
+      "type": "PixaromaLoadImageMini",
+      "pos": [
+        -23.60356926636316,
+        971.8258284927839
+      ],
+      "size": [
+        466.34375,
+        594.828125
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "links": [
+            310
+          ]
+        },
+        {
+          "name": "image_info",
+          "type": "PIX_IMAGE_INFO",
+          "links": null
+        }
+      ],
+      "title": "3. Load Image",
+      "properties": {
+        "Node name for S&R": "PixaromaLoadImageMini",
+        "cnr_id": "ComfyUI-Pixaroma",
+        "ver": "13f9d5d1da21e09515a5843e9392c3f69a435297"
+      },
+      "widgets_values": [
+        "Pixa Bunny HipHop.jpeg",
+        "image",
+        ""
+      ],
+      "color": "#14436c",
+      "bgcolor": "#2a2a2a"
+    },
+    {
+      "id": 250,
+      "type": "PixaromaLoadVideo",
+      "pos": [
+        -508.64066509992557,
+        265.48902589426774
+      ],
+      "size": [
+        467.09368935626776,
+        594.75346272038
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "video",
+          "name": "video",
+          "type": "COMBO",
+          "widget": {
+            "name": "video"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "max_frames",
+          "name": "max_frames",
+          "type": "INT",
+          "widget": {
+            "name": "max_frames"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "force_fps",
+          "name": "force_fps",
+          "type": "FLOAT",
+          "widget": {
+            "name": "force_fps"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "skip_first_frames",
+          "name": "skip_first_frames",
+          "type": "INT",
+          "widget": {
+            "name": "skip_first_frames"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "custom_width",
+          "name": "custom_width",
+          "type": "INT",
+          "widget": {
+            "name": "custom_width"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "custom_height",
+          "name": "custom_height",
+          "type": "INT",
+          "widget": {
+            "name": "custom_height"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "video_frames",
+          "name": "video_frames",
+          "type": "IMAGE",
+          "links": [
+            311
+          ]
+        },
+        {
+          "localized_name": "audio",
+          "name": "audio",
+          "type": "AUDIO",
+          "links": [
+            312
+          ]
+        },
+        {
+          "localized_name": "frame_count",
+          "name": "frame_count",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "localized_name": "fps",
+          "name": "fps",
+          "type": "FLOAT",
+          "links": null
+        },
+        {
+          "localized_name": "width",
+          "name": "width",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "localized_name": "height",
+          "name": "height",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "localized_name": "duration",
+          "name": "duration",
+          "type": "FLOAT",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PixaromaLoadVideo"
+      },
+      "widgets_values": [
+        null,
+        0,
+        0,
+        0,
+        0,
+        0,
+        null,
+        ""
+      ],
+      "color": "#1d1d1d",
+      "bgcolor": "#2a2a2a"
     }
   ],
   "links": [
@@ -1037,14 +1214,6 @@
       "FLOAT"
     ],
     [
-      299,
-      247,
-      0,
-      237,
-      7,
-      "AUDIO"
-    ],
-    [
       300,
       243,
       0,
@@ -1122,6 +1291,30 @@
       0,
       248,
       3,
+      "AUDIO"
+    ],
+    [
+      310,
+      249,
+      0,
+      237,
+      4,
+      "IMAGE"
+    ],
+    [
+      311,
+      250,
+      0,
+      237,
+      5,
+      "IMAGE"
+    ],
+    [
+      312,
+      250,
+      1,
+      237,
+      7,
       "AUDIO"
     ]
   ],

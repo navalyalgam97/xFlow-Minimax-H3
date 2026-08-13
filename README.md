@@ -3,7 +3,7 @@
 <div align="center">
 
 ![xFlowOne Banner](https://img.shields.io/badge/xFlowOne-Minimax_H3-00ff66?style=for-the-badge&logo=comfyui&logoColor=black)
-![Version](https://img.shields.io/badge/version-1.10.0-00ff66?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.11.0-00ff66?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
 
 *A single-node, 1:1 `xFlowOne` design system UI for Minimax H3 Video Generation in ComfyUI V2.*
@@ -62,7 +62,19 @@ All required models can be managed and downloaded automatically via the built-in
 
 ## 📜 Changelog
 
-### Version 1.10.0 (Latest Release)
+### Version 1.11.0 (Latest Release)
+
+> R2V gains a second reference image and a reference video, both optional.
+
+- 🖼️ **Second Reference Image** (`REF IMAGE 2 (OPT)`) → `ref_image_1`. Output size still comes from reference image 1 only.
+- 🎬 **Reference Video** (`REF VIDEO (OPT)`) → `ref_video_0`, with the video's own audio feeding `ref_audio_0`.
+- ✂️ **Truly optional**: unused loaders are pruned from the submitted graph, so leaving both empty submits the same graph R2V always used. Clearing the video hands `ref_audio_0` back to your uploaded audio track.
+- 🔀 **Slot routing now reads the graph**, not node titles — the R2V template has two loaders both titled "3. Load Image", which previously sent image 2's filename to slot 1.
+- 🎙️ **Two-picture prompt presets** when a second reference is loaded.
+
+> Needs a MiniMax H3 node build exposing `ref_image_1` / `ref_video_0`. Older builds work unchanged if the optional slots are left empty.
+
+### Version 1.10.0
 
 > Generation feedback and prompt helpers.
 

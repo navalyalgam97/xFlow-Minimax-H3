@@ -2,6 +2,23 @@
 
 All notable changes to the **xFlowOne · Minimax H3** single-node video interface for ComfyUI.
 
+## [1.11.0] - 2026-08-13
+
+### 🖼️ Second Reference Image & Reference Video For R2V
+
+- **🖼️ Optional Second Reference Image** (`REF IMAGE 2 (OPT)`): feeds `ref_images.ref_image_1`. The output resolution is still driven by reference image 1 alone — the second image is deliberately not wired to the model's `width`/`height`.
+- **🎬 Optional Reference Video** (`REF VIDEO (OPT)`): feeds `ref_videos.ref_video_0` via `PixaromaLoadVideo`. In this template the video's own audio track also supplies `ref_audios.ref_audio_0`.
+- **✂️ Both Are Genuinely Optional**: an unset loader submits an empty filename and ComfyUI rejects the *entire* prompt, so anything unused is lifted back out of the submitted graph — loader, any intermediate resize node, and the model link. With neither in use, R2V submits exactly the 18-node graph it always did.
+  - Dropping the video must not take the reference audio with it: `ref_audios.ref_audio_0` falls back to the uploaded audio track, which is what fed it before the video input existed. Lip-sync is unaffected either way — `PixaromaH3AudioSync.track` always comes from the audio file.
+  - All four combinations (image 2 + video / image 2 / video / neither) were checked against both R2V workflows: valid graph, no dangling links, no empty filenames.
+- **🔀 Image Slot Routing Reads The Graph, Not Titles**: the R2V template ships two `PixaromaLoadImageMini` nodes **both titled "3. Load Image"**, so the old title-based match sent the second image's filename to the first slot. Slots are now resolved by walking back from each `ref_images.ref_image_N` input to its loader, through any intermediate node. Titles remain the fallback for I2V's end frame, whose model node has no `ref_image_N` inputs.
+- **📦 R2V Workflow Templates Updated**: both SPEAK and SING now carry the second image loader and the video loader.
+- **🎙️ Two-Picture Prompt Presets**: loading a second reference switches the R2V preset to wording that references `<Picture 1>` and `<Picture 2>`, and reverts when it is cleared. Text you wrote yourself is still never overwritten.
+
+> **Requires a MiniMax H3 node build exposing `ref_images.ref_image_1` and `ref_videos.ref_video_0`.** Older builds still work as before — leave the two optional slots empty and those inputs are pruned from the graph entirely.
+
+---
+
 ## [1.10.0] - 2026-08-12
 
 ### ⏱️ Generation Timer, Stop Button, GPT Prompt Helper

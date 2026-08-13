@@ -33,7 +33,7 @@ const C = {
 };
 
 // Keep in step with CHANGELOG.md - this is what the Help drawer reports.
-const NODE_VERSION = "1.10.0";
+const NODE_VERSION = "1.11.0";
 
 // The node box is a fixed 16:9 (1360 x 765 is exactly 16:9). Widened rather
 // than shortened so the existing 760px-tall column still fits without scrolling.
@@ -43,6 +43,13 @@ const NODE_H = 765;
 // Default R2V prompts. Both lock the subject to the reference image and keep the
 // head steady so the mouth reads; they differ in how the mouth and body follow
 // speech versus a sung vocal.
+// Two-reference variants, used when a second reference image is loaded. Same
+// wording, with the subject taken from both views and the setting from the first.
+const R2V_PROMPT_PRESETS_2IMG = {
+  SPEAK: "<Picture 1> and <Picture 2> are the same subject, exactly as shown: identical features, colouring and markings, with nothing added, removed or restyled. The subject speaks the words in <Audio 1>, the mouth shaping each syllable as it is said, with natural pauses between sentences. The body makes small natural shifts, but the head stays steady so the mouth reads clearly: all movement is small and natural, never large or sudden. The setting stays exactly as <Picture 1> shows it: Light, colour and background hold steady for the whole shot, nothing else enters the frame, and the face stays fully visible throughout.",
+  SING: "<Picture 1> and <Picture 2> are the same subject, exactly as shown: identical features, colouring and markings, with nothing added, removed or restyled. The subject performs the vocal in <Audio 1>, the mouth shaping each word as it is sung, opening wider on held notes and closing between phrases. The body moves in time with the music, matching its energy, but the head stays steady so the mouth reads clearly: all movement is small and natural, never large or sudden. The setting stays exactly as <Picture 1> shows it: Light, colour and background hold steady for the whole shot, nothing else enters the frame, and the face stays fully visible throughout.",
+};
+
 const R2V_PROMPT_PRESETS = {
   SPEAK: "<Picture 1> is the subject, exactly as shown: identical features, colouring and markings, with nothing added, removed or restyled. The subject speaks the words in <Audio 1>, the mouth shaping each syllable as it is said, with natural pauses between sentences. The body makes small natural shifts, but the head stays steady so the mouth reads clearly: all movement is small and natural, never large or sudden. The setting stays exactly as <Picture 1> shows it: Light, colour and background hold steady for the whole shot, nothing else enters the frame, and the face stays fully visible throughout.",
   SING: "<Picture 1> is the subject, exactly as shown: identical features, colouring and markings, with nothing added, removed or restyled. The subject performs the vocal in <Audio 1>, the mouth shaping each word as it is sung, opening wider on held notes and closing between phrases. The body moves in time with the music, matching its energy, but the head stays steady so the mouth reads clearly: all movement is small and natural, never large or sudden. The setting stays exactly as <Picture 1> shows it: Light, colour and background hold steady for the whole shot, nothing else enters the frame, and the face stays fully visible throughout.",
@@ -900,6 +907,39 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
   const allObjInfo = await fetchAllObjectInfo();
   const promptPayload = {};
 
+  // Which loader feeds which reference slot, read from the graph rather than
+  // from node titles: the R2V template ships two image loaders both titled
+  // "3. Load Image", so titles cannot tell them apart. Walks back through any
+  // intermediate nodes (e.g. Longest Side) to the loader itself.
+  const refSlotByNodeId = {};
+  {
+    const nodesById = {};
+    workflowJson.nodes.forEach(n => { nodesById[String(n.id)] = n; });
+    const linkById = {};
+    (workflowJson.links || []).forEach(l => { linkById[l[0]] = l; });
+    const originOf = (node) => {
+      for (const inp of (node.inputs || [])) {
+        const l = inp.link != null && linkById[inp.link];
+        if (l && (inp.type === "IMAGE" || inp.type === "*")) return nodesById[String(l[1])];
+      }
+      return null;
+    };
+    const model = workflowJson.nodes.find(n => n.type === "MiniMaxH3ReferenceToVideo");
+    (model ? model.inputs || [] : []).forEach(inp => {
+      const m = /^ref_images\.ref_image_(\d+)$/.exec(inp.name || "");
+      if (!m || inp.link == null) return;
+      const link = linkById[inp.link];
+      let node = link && nodesById[String(link[1])];
+      for (let hop = 0; node && hop < 4; hop++) {
+        if (node.type === "PixaromaLoadImageMini") {
+          refSlotByNodeId[String(node.id)] = parseInt(m[1], 10) + 1;   // 0-based -> slot 1/2
+          return;
+        }
+        node = originOf(node);
+      }
+    });
+  }
+
   for (const node of workflowJson.nodes) {
     const nodeId = String(node.id);
     const classType = node.type;
@@ -976,8 +1016,14 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
       if (params.height) inputs["height"] = parseInt(params.height);
       if (wv[4]) inputs["match_mode"] = wv[4];
     } else if (classType === "PixaromaLoadImageMini") {
-      const title = node.title || "";
-      const chosenImg = (title.includes("Last Frame") || title.includes("2."))
+      const title = (node.title || "").toLowerCase();
+      // Graph wiring wins; titles are only the fallback for I2V's end frame,
+      // which has no ref_image slot to read.
+      const graphSlot = refSlotByNodeId[nodeId];
+      const isSecondSlot = graphSlot
+        ? graphSlot === 2
+        : (title.includes("last frame") || title.includes("2.") || title.includes("image 2"));
+      const chosenImg = isSecondSlot
         ? (params.image_name_2 || params.image_name_1 || wv[0] || "")
         : (params.image_name_1 || wv[0] || "");
 
@@ -985,6 +1031,11 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
       inputs["image_path"] = chosenImg;
       inputs["file"] = chosenImg;
       inputs["upload"] = chosenImg;
+    } else if (classType === "PixaromaLoadVideo") {
+      const chosenVideo = params.video_name || wv[0] || "";
+      inputs["video"] = chosenVideo;
+      inputs["file"] = chosenVideo;
+      inputs["path"] = chosenVideo;
     } else if (classType === "PixaromaLoadAudio") {
       const chosenAudio = params.audio_name || wv[0] || "";
       inputs["audio"] = chosenAudio;
@@ -1020,6 +1071,54 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
     }
 
     promptPayload[nodeId] = { class_type: classType, inputs: inputs };
+  }
+
+  // The second reference image and the reference video are both optional. An
+  // unset loader submits an empty filename and ComfyUI rejects the whole
+  // prompt, so anything unused is lifted back out of the graph.
+  {
+    const modelEntry = Object.entries(promptPayload)
+      .find(([, n]) => n.class_type === "MiniMaxH3ReferenceToVideo");
+    const model = modelEntry && modelEntry[1];
+
+    // Removes a source node and any upstream chain that only fed it.
+    const dropChain = (startId) => {
+      let cursor = String(startId);
+      for (let hop = 0; hop < 4 && promptPayload[cursor]; hop++) {
+        const upstream = Object.values(promptPayload[cursor].inputs)
+          .find(v => Array.isArray(v) && promptPayload[String(v[0])]);
+        delete promptPayload[cursor];
+        if (!upstream) break;
+        cursor = String(upstream[0]);
+      }
+    };
+
+    if (model && !params.image_name_2) {
+      const refLink = model.inputs["ref_images.ref_image_1"];
+      if (Array.isArray(refLink)) {
+        delete model.inputs["ref_images.ref_image_1"];
+        dropChain(refLink[0]);
+      }
+    }
+
+    if (model && !params.video_name) {
+      const vidLink = model.inputs["ref_videos.ref_video_0"];
+      const audLink = model.inputs["ref_audios.ref_audio_0"];
+      // The video also supplies ref_audio_0 in this template. Dropping it must
+      // not take the reference audio with it, so that input falls back to the
+      // uploaded audio track - which is what the workflow used before the video
+      // input existed.
+      if (Array.isArray(audLink) && Array.isArray(vidLink) && audLink[0] === vidLink[0]) {
+        const audioLoader = Object.entries(promptPayload)
+          .find(([, n]) => n.class_type === "PixaromaLoadAudio");
+        if (audioLoader && params.audio_name) model.inputs["ref_audios.ref_audio_0"] = [audioLoader[0], 0];
+        else delete model.inputs["ref_audios.ref_audio_0"];
+      }
+      if (Array.isArray(vidLink)) {
+        delete model.inputs["ref_videos.ref_video_0"];
+        dropChain(vidLink[0]);
+      }
+    }
   }
 
   // Diagnostic: the exact state each Pixaroma node will run with. We build the
@@ -2500,6 +2599,7 @@ app.registerExtension({
       let imgData1 = null;
       let imgData2 = null;
       let audioData = null;
+      let videoData = null;
 
       // Audio Sync Mode Pill Switch Bar for R2V mode (SPEAK vs SING with vector icons)
       const r2vSwitchRow = mk("div", {
@@ -2674,6 +2774,9 @@ app.registerExtension({
               const imgObj = { name: serverFileName, url: objectUrl, width: w, height: h };
               if (slotKey === 1) { imgData1 = imgObj; S.imgData1 = imgObj; }
               else { imgData2 = imgObj; S.imgData2 = imgObj; }
+              // A second reference switches the R2V preset to the two-picture
+              // wording (and back out when it is cleared).
+              if (slotKey === 2 && S.mode === "R2V") applyR2vPreset(S.r2v_type);
               thumbImg.src = objectUrl;
               dimBadge.textContent = `${w} × ${h} px • ${serverFileName}`;
               emptyArea.style.display = "none";
@@ -2690,6 +2793,7 @@ app.registerExtension({
           fileInput.value = "";
           if (slotKey === 1) { imgData1 = null; S.imgData1 = null; }
           else { imgData2 = null; S.imgData2 = null; }
+          if (slotKey === 2 && S.mode === "R2V") applyR2vPreset(S.r2v_type);
           previewArea.style.display = "none";
           emptyArea.style.display = "flex";
         };
@@ -2855,6 +2959,92 @@ app.registerExtension({
         return box;
       };
 
+      // ── REFERENCE VIDEO UPLOAD (R2V, optional) ──────────────────────────
+      // Feeds ref_video_0, and in this template its audio track also feeds
+      // ref_audio_0. Left empty, both are pruned from the submitted graph.
+      const createVideoUploadBox = () => {
+        const box = mk("div", {
+          background: C.bg1,
+          border: `1px solid ${C.border}`,
+          borderRadius: "6px",
+          padding: "8px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "6px",
+          boxSizing: "border-box",
+          position: "relative",
+          minWidth: "0",
+        });
+        box.appendChild(cap("REF VIDEO (OPT)"));
+
+        const fileInput = document.createElement("input");
+        fileInput.type = "file";
+        fileInput.accept = "video/mp4, video/quicktime, video/webm, video/x-matroska";
+        fileInput.style.display = "none";
+        document.body.appendChild(fileInput);
+
+        const emptyArea = mk("div", {
+          flex: "1", border: `1px dashed ${C.border}`, borderRadius: "6px",
+          display: "flex", flexDirection: "column", alignItems: "center",
+          justifyContent: "center", gap: "4px", cursor: "pointer", padding: "10px 6px",
+        });
+        emptyArea.appendChild(svgIcon("video", 18, LIME));
+        emptyArea.appendChild(mk("div", { fontSize: "10px", fontWeight: "800", color: LIME }, { textContent: "Upload Video" }));
+        emptyArea.appendChild(mk("div", { fontSize: "9px", color: C.muted }, { textContent: "(.mp4, .mov, .webm)" }));
+        emptyArea.onclick = () => fileInput.click();
+
+        const previewArea = mk("div", {
+          display: "none", flexDirection: "column", gap: "4px", position: "relative",
+        });
+        const vidPreview = mk("video", {
+          width: "100%", height: "72px", objectFit: "cover", borderRadius: "4px", background: "#000",
+        }, { muted: true, playsInline: true, controls: false });
+        const nameLbl = mk("div", {
+          fontSize: "9px", color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+        });
+        const clearBtn = mk("button", {
+          position: "absolute", top: "4px", right: "4px",
+          background: "rgba(10, 10, 10, 0.8)", border: `1px solid ${C.border}`, borderRadius: "4px",
+          cursor: "pointer", padding: "3px 5px", display: "inline-flex", alignItems: "center",
+        });
+        clearBtn.appendChild(svgIcon("close", 11, "#ff6666"));
+        previewArea.append(vidPreview, nameLbl, clearBtn);
+        box.append(emptyArea, previewArea);
+
+        const handleVideoSelect = async (file) => {
+          if (!file) return;
+          const formData = new FormData();
+          formData.append("image", file);      // ComfyUI's upload route takes video too
+          formData.append("overwrite", "true");
+          try {
+            const res = await fetch("/upload/image", { method: "POST", body: formData });
+            const data = await res.json();
+            const serverFileName = data.name || file.name;
+            const objectUrl = URL.createObjectURL(file);
+            videoData = { name: serverFileName, url: objectUrl };
+            S.videoData = videoData;
+            persist();
+            vidPreview.src = objectUrl;
+            nameLbl.textContent = serverFileName;
+            emptyArea.style.display = "none";
+            previewArea.style.display = "flex";
+          } catch (e) { console.error("[MinimaxH3] Video upload failed:", e); }
+        };
+
+        fileInput.onchange = () => { if (fileInput.files && fileInput.files[0]) handleVideoSelect(fileInput.files[0]); };
+        clearBtn.onclick = (e) => {
+          e.stopPropagation();
+          fileInput.value = "";
+          videoData = null;
+          S.videoData = null;
+          persist();
+          vidPreview.removeAttribute("src");
+          previewArea.style.display = "none";
+          emptyArea.style.display = "flex";
+        };
+        return box;
+      };
+
       const slotGrid = mk("div", {
         display: "grid",
         gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
@@ -2866,10 +3056,14 @@ app.registerExtension({
 
       const box1HeaderLbl = cap("START FRAME");
       const box1 = createImgUploadBox(box1HeaderLbl, 1);
-      const box2Img = createImgUploadBox("END FRAME (OPT)", 2);
+      // Slot 2 is shared: I2V's end frame and R2V's optional second reference
+      // are the same upload, so the label changes with the mode.
+      const box2HeaderLbl = cap("END FRAME (OPT)");
+      const box2Img = createImgUploadBox(box2HeaderLbl, 2);
       const box2Audio = createAudioUploadBox();
+      const box2Video = createVideoUploadBox();
 
-      slotGrid.append(box1, box2Img, box2Audio);
+      slotGrid.append(box1, box2Img, box2Audio, box2Video);
       slotCard.appendChild(slotGrid);
 
       // ── ADVANCED OPTIONS EXPANDABLE ACCORDION CARD ──────────────────────
@@ -3426,14 +3620,21 @@ app.registerExtension({
       // Fills the prompt when entering R2V and swaps it when toggling
       // SPEAK/SING. Anything the user typed themselves is left alone - only an
       // empty box or the other preset is replaced.
+      // Any of the four presets counts as "not the user's own words", so the
+      // text follows both the SPEAK/SING toggle and the second reference image.
+      const isAnyR2vPreset = (text) =>
+        text === R2V_PROMPT_PRESETS.SPEAK || text === R2V_PROMPT_PRESETS.SING ||
+        text === R2V_PROMPT_PRESETS_2IMG.SPEAK || text === R2V_PROMPT_PRESETS_2IMG.SING;
+
+      const currentR2vPreset = (type) => {
+        const key = type === "SING" ? "SING" : "SPEAK";
+        return imgData2 ? R2V_PROMPT_PRESETS_2IMG[key] : R2V_PROMPT_PRESETS[key];
+      };
+
       applyR2vPreset = (type) => {
-        const preset = R2V_PROMPT_PRESETS[type] || R2V_PROMPT_PRESETS.SPEAK;
+        const preset = currentR2vPreset(type);
         const current = (promptTA.value || "").trim();
-        const replaceable =
-          current === "" ||
-          current === R2V_PROMPT_PRESETS.SPEAK ||
-          current === R2V_PROMPT_PRESETS.SING;
-        if (!replaceable || current === preset) return;
+        if (!(current === "" || isAnyR2vPreset(current)) || current === preset) return;
         promptTA.value = preset;
         S.prompt = preset;
         persist();
@@ -3443,8 +3644,7 @@ app.registerExtension({
       // image and an audio track, neither of which T2V or I2V has. Text the user
       // wrote themselves stays put.
       const clearR2vPreset = () => {
-        const current = (promptTA.value || "").trim();
-        if (current !== R2V_PROMPT_PRESETS.SPEAK && current !== R2V_PROMPT_PRESETS.SING) return;
+        if (!isAnyR2vPreset((promptTA.value || "").trim())) return;
         promptTA.value = "";
         S.prompt = "";
         persist();
@@ -3452,7 +3652,7 @@ app.registerExtension({
 
       // Deliberate restore, so a preset deleted by accident is one click back.
       const resetPromptToPreset = () => {
-        const preset = R2V_PROMPT_PRESETS[S.r2v_type === "SING" ? "SING" : "SPEAK"];
+        const preset = currentR2vPreset(S.r2v_type);
         promptTA.value = preset;
         S.prompt = preset;
         persist();
@@ -4914,14 +5114,17 @@ app.registerExtension({
           orientSizeBox.style.display = "flex";
           longestSideBox.style.display = "none";
           slotCard.style.display = "none";
+          box2Video.style.display = "none";
         } else if (m === "I2V") {
           orientSizeBox.style.display = "none";
           longestSideBox.style.display = "flex";
           slotCard.style.display = "flex";
           r2vSwitchRow.style.display = "none";
           box1HeaderLbl.textContent = "START FRAME";
+          box2HeaderLbl.textContent = "END FRAME (OPT)";
           box2Img.style.display = "flex";
           box2Audio.style.display = "none";
+          box2Video.style.display = "none";
         } else if (m === "R2V") {
           orientSizeBox.style.display = "none";
           longestSideBox.style.display = "flex";
@@ -4929,8 +5132,10 @@ app.registerExtension({
           r2vSwitchRow.style.display = "flex";
           updateR2vSwitch(S.r2v_type === "SING" ? "SING" : "SPEAK");
           box1HeaderLbl.textContent = "REF IMAGE";
-          box2Img.style.display = "none";
+          box2HeaderLbl.textContent = "REF IMAGE 2 (OPT)";
+          box2Img.style.display = "flex";
           box2Audio.style.display = "flex";
+          box2Video.style.display = "flex";
         }
 
         self.setSize([NODE_W, NODE_H + 50]);
@@ -5002,6 +5207,7 @@ app.registerExtension({
             image_name_1: imgData1 ? imgData1.name : null,
             image_name_2: imgData2 ? imgData2.name : null,
             audio_name: audioData ? audioData.name : null,
+            video_name: videoData ? videoData.name : null,
           }, statusLabel, progressBarInner);
           activePromptId = (queued && queued.prompt_id) || null;
           pollRunUntilDone(activePromptId);
