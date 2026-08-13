@@ -2,6 +2,19 @@
 
 All notable changes to the **xFlowOne · Minimax H3** single-node video interface for ComfyUI.
 
+## [1.11.2] - 2026-08-13
+
+### 🐛 Workflow Templates Shipped With Sample Filenames Baked In
+
+The real cause of *"[Pixaroma] Load Audio: no usable sound file selected"* on a machine that had never seen that file.
+
+- **📁 Sample Filenames Cleared From All Templates**: the workflow JSONs carried Pixaroma's demo assets — `I can talk audio.wav`, `I am pixa bunny.mp3`, `Pixa Bunny HipHop.jpeg`, `WomanPortraitRed.png`, `BallerinaBunny.png`, `BunnySitting.jpg` — as loader defaults. They resolve on a machine with the Pixaroma samples installed and fail everywhere else, which is why a fresh cloud GPU box hit it immediately. Model loader filenames (the `.safetensors`) are untouched.
+- **🔑 `loadAudioState.file` Is Now Assigned Unconditionally**: Pixaroma reads this state **in preference to the widget value**, and the patcher only wrote it `if (audio)`. With no audio selected, whatever filename the template had been saved with survived into the submitted run. It is now set to the chosen file or cleared outright.
+
+> If you saved a workflow template from your own ComfyUI, it carries your local filenames in `properties.*State`. That is what leaked here.
+
+---
+
 ## [1.11.1] - 2026-08-13
 
 ### 🐛 Audio Is Optional, And Stale Filenames No Longer Kill A Run

@@ -3,7 +3,7 @@
 <div align="center">
 
 ![xFlowOne Banner](https://img.shields.io/badge/xFlowOne-Minimax_H3-00ff66?style=for-the-badge&logo=comfyui&logoColor=black)
-![Version](https://img.shields.io/badge/version-1.11.1-00ff66?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.11.2-00ff66?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
 
 *A single-node, 1:1 `xFlowOne` design system UI for Minimax H3 Video Generation in ComfyUI V2.*
@@ -62,7 +62,14 @@ All required models can be managed and downloaded automatically via the built-in
 
 ## 📜 Changelog
 
-### Version 1.11.1 (Latest Release)
+### Version 1.11.2 (Latest Release)
+
+> Fixes "no usable sound file selected" on a fresh machine.
+
+- 📁 **Sample filenames cleared from the workflow templates**: they shipped with Pixaroma's demo assets (`I can talk audio.wav`, `Pixa Bunny HipHop.jpeg`, …) as loader defaults, which only resolve on a machine that has those samples. Model `.safetensors` names are untouched.
+- 🔑 **`loadAudioState.file` is now always assigned**: Pixaroma reads that state ahead of the widget, and it was only written when an audio file was chosen — so a template's saved filename survived into the run.
+
+### Version 1.11.1
 
 > Fixes a run-killing error when no audio file is set.
 

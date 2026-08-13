@@ -33,7 +33,7 @@ const C = {
 };
 
 // Keep in step with CHANGELOG.md - this is what the Help drawer reports.
-const NODE_VERSION = "1.11.1";
+const NODE_VERSION = "1.11.2";
 
 // The node box is a fixed 16:9 (1360 x 765 is exactly 16:9). Widened rather
 // than shortened so the existing 760px-tall column still fits without scrolling.
@@ -814,8 +814,11 @@ function patchPixaromaState(stateKey, state, params) {
       break;
 
     case "loadAudioState": {
-      const audio = params.audio_name || "";
-      if (audio) state.file = audio;
+      // Assign unconditionally. Pixaroma reads this state in preference to the
+      // widget, so an "if (audio)" guard let whatever filename the template was
+      // saved with survive into the run - a file that only exists on the machine
+      // the template came from.
+      state.file = params.audio_name || "";
       state.start = 0;
       state.length = num(params.duration, state.length ?? 5);
       break;

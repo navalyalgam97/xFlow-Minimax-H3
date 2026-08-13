@@ -679,7 +679,7 @@
         "Node name for S&R": "PixaromaLoadImageMini"
       },
       "widgets_values": [
-        "Pixa Bunny HipHop.jpeg",
+        "",
         "image",
         ""
       ],
@@ -917,7 +917,7 @@
         "ver": "f9c6df78d613ea11ca28b641a50160e251cc00e6",
         "Node name for S&R": "PixaromaLoadAudio",
         "loadAudioState": {
-          "file": "I am pixa bunny.mp3",
+          "file": "",
           "start": 0,
           "length": 5,
           "whenUnwired": "whole",
@@ -966,7 +966,7 @@
         "ver": "13f9d5d1da21e09515a5843e9392c3f69a435297"
       },
       "widgets_values": [
-        "Pixa Bunny HipHop.jpeg",
+        "",
         "image",
         ""
       ],
