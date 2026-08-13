@@ -33,7 +33,7 @@ const C = {
 };
 
 // Keep in step with CHANGELOG.md - this is what the Help drawer reports.
-const NODE_VERSION = "1.11.0";
+const NODE_VERSION = "1.11.1";
 
 // The node box is a fixed 16:9 (1360 x 765 is exactly 16:9). Widened rather
 // than shortened so the existing 760px-tall column still fits without scrolling.
@@ -904,6 +904,32 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
   const workflowJson = await res.json();
   if (!workflowJson || !workflowJson.nodes) throw new Error(`Failed to load workflow template for mode: ${mode}`);
 
+  // Uploaded filenames are remembered across sessions, but the files live in
+  // ComfyUI's input folder - which is a different machine after a move to a
+  // cloud box, or gets cleaned out. Submitting a name that is no longer there
+  // fails the whole prompt ("no usable sound file selected"), so optional
+  // inputs whose file has gone are treated as simply not set.
+  const inputFileExists = async (name) => {
+    if (!name) return false;
+    try {
+      const res = await api.fetchApi(`/view?filename=${encodeURIComponent(name)}&type=input&subfolder=`);
+      return !!(res && res.ok);
+    } catch (e) {
+      return true;   // cannot tell - leave the run alone
+    }
+  };
+
+  const missingInputs = [];
+  for (const key of ["audio_name", "video_name", "image_name_2"]) {
+    if (params[key] && !(await inputFileExists(params[key]))) {
+      missingInputs.push(params[key]);
+      params = Object.assign({}, params, { [key]: null });
+    }
+  }
+  if (missingInputs.length) {
+    console.warn("[MinimaxH3] Not in ComfyUI's input folder, continuing without:", missingInputs);
+  }
+
   const allObjInfo = await fetchAllObjectInfo();
   const promptPayload = {};
 
@@ -1081,6 +1107,26 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
       .find(([, n]) => n.class_type === "MiniMaxH3ReferenceToVideo");
     const model = modelEntry && modelEntry[1];
 
+    // Lifts a node out while keeping the pipeline connected: every consumer of
+    // one of its outputs is re-pointed at whatever fed the input of the same
+    // name (model -> model, latent -> latent). Outputs with no matching input,
+    // like the sync node's "audio", are dropped from the consumer instead.
+    const bypassNode = (nodeId) => {
+      const node = promptPayload[nodeId];
+      if (!node) return;
+      const def = workflowJson.nodes.find(n => String(n.id) === String(nodeId));
+      const outNames = ((def && def.outputs) || []).map(o => o.name);
+      Object.values(promptPayload).forEach(consumer => {
+        Object.entries(consumer.inputs).forEach(([key, val]) => {
+          if (!Array.isArray(val) || String(val[0]) !== String(nodeId)) return;
+          const passthrough = node.inputs[outNames[val[1]]];
+          if (Array.isArray(passthrough)) consumer.inputs[key] = passthrough;
+          else delete consumer.inputs[key];
+        });
+      });
+      delete promptPayload[nodeId];
+    };
+
     // Removes a source node and any upstream chain that only fed it.
     const dropChain = (startId) => {
       let cursor = String(startId);
@@ -1117,6 +1163,29 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
       if (Array.isArray(vidLink)) {
         delete model.inputs["ref_videos.ref_video_0"];
         dropChain(vidLink[0]);
+      }
+    }
+
+    // No audio track: the loader would fail with "no usable sound file
+    // selected" and kill the run. The sync node it feeds cannot simply be
+    // deleted - model and latent pass through it on the way to the sampler -
+    // so it is bypassed, and the mp4 is written without an audio track.
+    if (!params.audio_name) {
+      const audioEntry = Object.entries(promptPayload)
+        .find(([, n]) => n.class_type === "PixaromaLoadAudio");
+      if (audioEntry) {
+        const audioId = audioEntry[0];
+        Object.entries(promptPayload)
+          .filter(([, n]) => n.class_type === "PixaromaH3AudioSync" &&
+            Object.values(n.inputs).some(v => Array.isArray(v) && String(v[0]) === audioId))
+          .forEach(([syncId]) => bypassNode(syncId));
+        // Anything still pointing at the loader (e.g. the model's ref_audio_0).
+        Object.values(promptPayload).forEach(n => {
+          Object.entries(n.inputs).forEach(([k, v]) => {
+            if (Array.isArray(v) && String(v[0]) === audioId) delete n.inputs[k];
+          });
+        });
+        delete promptPayload[audioId];
       }
     }
   }
@@ -2818,7 +2887,7 @@ app.registerExtension({
         });
 
         const hdr = mk("div", { display: "flex", justifyContent: "space-between", alignItems: "center" });
-        hdr.appendChild(cap("AUDIO FILE"));
+        hdr.appendChild(cap("AUDIO FILE (OPT)"));
         box.appendChild(hdr);
 
         const audioInput = document.createElement("input");

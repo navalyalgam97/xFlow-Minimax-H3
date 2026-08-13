@@ -2,6 +2,17 @@
 
 All notable changes to the **xFlowOne · Minimax H3** single-node video interface for ComfyUI.
 
+## [1.11.1] - 2026-08-13
+
+### 🐛 Audio Is Optional, And Stale Filenames No Longer Kill A Run
+
+- **🔇 Audio Track Optional** (`AUDIO FILE (OPT)`): with no audio, `PixaromaLoadAudio` failed the whole prompt with *"no usable sound file selected"*. The loader is now pruned when unused — but `PixaromaH3AudioSync` cannot simply go with it, since **model** and **latent** pass through it on the way to the KSampler. It is bypassed instead: consumers are re-pointed at whatever fed the input of the same name, and `PixaromaSaveMp4.audio` (an optional input) is dropped, so the mp4 is written without an audio track.
+  - Verified across every combination in both R2V workflows: with audio the sync node stays and the sampler reads from it; without, the sampler reads `model` from `UNETLoader` and `latent` from `MiniMaxH3ReferenceToVideo` directly. No dangling links in any case.
+  - With no audio there is nothing to lip-sync to, so SPEAK/SING produce a silent clip driven by the prompt and references alone.
+- **📁 Missing Input Files Are Treated As Unset**: uploaded filenames persist across sessions, but the files live in ComfyUI's input folder — a different machine after moving to a cloud GPU box, or simply cleaned out. Submitting a remembered name whose file has gone failed the entire prompt. Optional inputs (audio, reference video, second reference image) are now checked against the input folder before submitting; anything missing is pruned and named in a console warning instead of aborting the run.
+
+---
+
 ## [1.11.0] - 2026-08-13
 
 ### 🖼️ Second Reference Image & Reference Video For R2V

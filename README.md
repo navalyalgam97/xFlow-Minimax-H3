@@ -3,7 +3,7 @@
 <div align="center">
 
 ![xFlowOne Banner](https://img.shields.io/badge/xFlowOne-Minimax_H3-00ff66?style=for-the-badge&logo=comfyui&logoColor=black)
-![Version](https://img.shields.io/badge/version-1.11.0-00ff66?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.11.1-00ff66?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
 
 *A single-node, 1:1 `xFlowOne` design system UI for Minimax H3 Video Generation in ComfyUI V2.*
@@ -62,7 +62,14 @@ All required models can be managed and downloaded automatically via the built-in
 
 ## 📜 Changelog
 
-### Version 1.11.0 (Latest Release)
+### Version 1.11.1 (Latest Release)
+
+> Fixes a run-killing error when no audio file is set.
+
+- 🔇 **Audio is optional**: the audio loader is pruned when unused. `PixaromaH3AudioSync` is *bypassed* rather than deleted, since model and latent pass through it to the sampler — so the pipeline stays connected and the mp4 is written without an audio track. (Nothing to lip-sync to, so SPEAK/SING give a silent clip.)
+- 📁 **Missing input files no longer abort a run**: remembered filenames whose files aren't in ComfyUI's input folder — after moving to a cloud GPU box, say — are treated as unset and pruned, with a console warning, instead of failing the whole prompt.
+
+### Version 1.11.0
 
 > R2V gains a second reference image and a reference video, both optional.
 
