@@ -40,4 +40,9 @@ ENV/
 *.tmp
 
 # Claude Code local settings (machine-specific paths)
-.claude/
+.claude/*
+# ...except shared gstack team-mode config
+!.claude/settings.json
+!.claude/hooks/
+.claude/hooks/*
+!.claude/hooks/check-gstack.sh
