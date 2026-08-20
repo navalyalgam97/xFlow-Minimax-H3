@@ -3544,6 +3544,8 @@ app.registerExtension({
         paddingTop: "8px",
         marginTop: "auto",
         boxSizing: "border-box",
+        // Anchor for the LoRA drawer, which floats above this section.
+        position: "relative",
       });
 
       const promptHdr = mk("div", { display: "flex", alignItems: "center", gap: "8px", flexShrink: "0", width: "100%", boxSizing: "border-box" });
@@ -3625,18 +3627,31 @@ app.registerExtension({
 
       promptHdr.append(gptPromptBtn, promptLabel, negToggleBtn, resetPromptBtn, promptHdrSpacer, addLoraBtn, expandBtn);
 
-      // Collapsible LoRA Manager Drawer
+      // Collapsible LoRA Manager Drawer.
+      //
+      // Floats ABOVE the prompt area instead of sitting in the flow. The panel
+      // root is a fixed 16:9 box with overflow:hidden, so a drawer that pushes
+      // layout down grows past the node's bottom edge and gets clipped - rows
+      // half-drawn, the prompt box squeezed. Opening upward keeps every row
+      // visible and leaves the prompt exactly where it was.
       const loraDrawer = mk("div", {
         display: "none",
         flexDirection: "column",
         gap: "8px",
-        background: C.bg2,
-        border: `1px solid ${LIME}`,
+        background: C.bg1,
+        border: `1px solid ${C.border}`,
         borderRadius: "8px",
         padding: "10px 12px",
-        marginTop: "4px",
         boxSizing: "border-box",
-        width: "100%",
+        position: "absolute",
+        left: "0",
+        right: "0",
+        bottom: "100%",
+        marginBottom: "6px",
+        maxHeight: "260px",
+        overflowY: "auto",
+        zIndex: "60",
+        boxShadow: "0 8px 24px rgba(0, 0, 0, .55)",
       });
 
       const loraHdr = mk("div", { display: "flex", justifyContent: "space-between", alignItems: "center" });
@@ -3675,7 +3690,10 @@ app.registerExtension({
         S.loras.forEach((slot, idx) => {
           const slotRow = mk("div", { display: "flex", gap: "8px", alignItems: "center", background: C.bg1, padding: "6px 8px", borderRadius: "6px", border: `1px solid ${C.border}`, width: "100%", boxSizing: "border-box" });
           
-          const sel = mk("select", { flex: "1", background: C.bg2, color: C.text, border: `1px solid ${C.border}`, borderRadius: "4px", padding: "4px", fontSize: "11px", outline: "none", cursor: "pointer" });
+          // minWidth:0 or a long safetensors filename blows the flex item past
+          // the row and pushes the strength box and the remove button out of
+          // sight.
+          const sel = mk("select", { flex: "1", minWidth: "0", background: C.bg2, color: C.text, border: `1px solid ${C.border}`, borderRadius: "4px", padding: "4px", fontSize: "11px", outline: "none", cursor: "pointer" });
           const defOpt = mk("option", { value: "", textContent: "Select LoRA safetensors..." });
           sel.appendChild(defOpt);
           const options = availableLoras.slice();
@@ -3832,7 +3850,10 @@ app.registerExtension({
           const card = mk("div", {
             background: C.bg2,
             borderRadius: "8px",
-            border: `1px solid ${m.installed ? LIME : C.border}`,
+            // Installed state is carried by the badge and the progress bar. The
+            // card keeps the neutral border either way - a lit-up outline on
+            // every finished download turned the whole pile green.
+            border: `1px solid ${C.border}`,
             padding: "12px 16px",
             display: "flex",
             flexDirection: "column",
