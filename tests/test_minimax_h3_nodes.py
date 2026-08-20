@@ -129,6 +129,54 @@ class TestMinimaxH3WorkflowEngine(unittest.TestCase):
         self.assertGreater(len(prompt_dict), 0)
 
 
+class TestMinimaxH3TurboLora(unittest.TestCase):
+    """Test the optional turbo LoRA entry and its wiring in the T2V workflow"""
+
+    def test_turbo_lora_registered(self):
+        info = mhn.REQUIRED_MODELS.get("turbo_lora")
+        self.assertIsNotNone(info)
+        self.assertEqual(info["type"], "loras")
+        self.assertEqual(info["rel_folder"], "loras")
+        self.assertTrue(info["url"].endswith(info["filename"]))
+
+    def test_turbo_lora_target_is_loras_folder(self):
+        target_dir, target_path = mhn._get_model_target_path("turbo_lora")
+        self.assertTrue(target_dir)
+        self.assertTrue(target_path.endswith(
+            "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors"))
+
+    def test_turbo_lora_never_blocks_a_run(self):
+        """The LoRA is optional - validation must not report it as missing."""
+        for mode in ("text_to_video", "reference_to_video"):
+            report = mhn.validate_minimax_environment(mode)
+            missing_ids = [m["id"] for m in report["missing_models"]]
+            self.assertNotIn("turbo_lora", missing_ids)
+
+    def test_t2v_lora_loader_feeds_the_sampler(self):
+        """The LoRA loader's MODEL output must reach the KSampler, or the LoRA
+        only ever touches CLIP and silently does nothing to the diffusion."""
+        wf = mhn.load_workflow_json("text_to_video")
+        nodes = {n["id"]: n for n in wf["nodes"]}
+        lora = [n for n in wf["nodes"] if n["type"] == "PixaromaLoraLoader"]
+        self.assertEqual(len(lora), 1)
+        lora_id = lora[0]["id"]
+
+        ksampler = [n for n in wf["nodes"] if n["type"] == "KSampler"][0]
+        model_link = [i for i in ksampler["inputs"] if i["name"] == "model"][0]["link"]
+        origin = [l for l in wf["links"] if l[0] == model_link][0][1]
+        self.assertEqual(origin, lora_id)
+
+    def test_t2v_lora_rows_ship_empty(self):
+        """A filename baked into the template resolves on no other machine."""
+        wf = mhn.load_workflow_json("text_to_video")
+        lora = [n for n in wf["nodes"] if n["type"] == "PixaromaLoraLoader"][0]
+        for row in lora["widgets_values"][0]["loras"]:
+            self.assertEqual(row["name"], "")
+        state = json.loads(lora["properties"]["loraLoaderState"])
+        for row in state["loras"]:
+            self.assertEqual(row["name"], "")
+
+
 class TestMinimaxH3NodeGeneration(unittest.TestCase):
     """Test MinimaxH3OneVideoNode generation input validation and metadata generation"""
 

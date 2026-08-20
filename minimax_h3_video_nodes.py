@@ -117,6 +117,19 @@ REQUIRED_MODELS = {
         "filename": "minimax_h3_audio_vae_fp32.safetensors",
         "url": "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_audio_vae_fp32.safetensors",
         "approx_size_gb": "577 MB"
+    },
+    # Optional: the 8-step turbo LoRA. Not part of validate_minimax_environment,
+    # so a missing copy never blocks a run - it only turns the LoRA row in the
+    # workflow's LoRA loader into an empty slot.
+    "turbo_lora": {
+        "id": "turbo_lora",
+        "name": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+        "title": "Minimax H3 Turbo 8-Step LoRA (Optional)",
+        "type": "loras",
+        "rel_folder": "loras",
+        "filename": "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+        "url": "https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/main/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+        "approx_size_gb": "1.96 GB"
     }
 }
 
