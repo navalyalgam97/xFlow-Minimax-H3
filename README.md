@@ -3,7 +3,7 @@
 <div align="center">
 
 ![xFlowOne Banner](https://img.shields.io/badge/xFlowOne-Minimax_H3-00ff66?style=for-the-badge&logo=comfyui&logoColor=black)
-![Version](https://img.shields.io/badge/version-1.12.0-00ff66?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.12.1-00ff66?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
 
 *A single-node, 1:1 `xFlowOne` design system UI for Minimax H3 Video Generation in ComfyUI V2.*
@@ -62,7 +62,15 @@ All required models can be managed and downloaded automatically via the built-in
 
 ## 📜 Changelog
 
-### Version 1.12.0 (Latest Release)
+### Version 1.12.1 (Latest Release)
+
+> Fixes the LoRA drawer opening into the node's bottom edge.
+
+- ⬆️ **Drawer floats above the prompt** instead of pushing layout down past the panel's fixed 16:9 box, where it was being clipped mid-row.
+- 📏 **Long LoRA filenames** no longer push the strength box and remove button out of the row.
+- 🟩 **No lit-up green border** on a model card once its download completes.
+
+### Version 1.12.0
 
 > Turbo 8-step LoRA, one click in Setup, loaded by the T2V workflow.
 

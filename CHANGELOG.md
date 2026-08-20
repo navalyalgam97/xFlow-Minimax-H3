@@ -2,6 +2,16 @@
 
 All notable changes to the **xFlowOne · Minimax H3** single-node video interface for ComfyUI.
 
+## [1.12.1] - 2026-08-20
+
+### 🐛 The LoRA Drawer Opened Into The Node's Bottom Edge
+
+- **⬆️ Drawer Floats Above The Prompt Instead Of Pushing Layout**: the panel root is a fixed 16:9 box with `overflow: hidden`, so a drawer that grows downward ran straight past the node's bottom edge — half-drawn rows, a squeezed prompt box. It is now absolutely positioned above the prompt area, capped at 260px with its own scroll, and the prompt stays exactly where it was.
+- **📏 Long Filenames No Longer Push The Row's Own Controls Out**: the LoRA `<select>` was `flex: 1` with no `min-width: 0`, so a long `.safetensors` name blew past the row and shoved the strength box and the remove button out of sight. The name truncates now.
+- **🟩 No Lit-Up Border On Finished Downloads**: an installed model card keeps the neutral border — the "Installed" badge and the filled progress bar already carry that state, and a green outline on every completed card turned the whole Setup pile green.
+
+---
+
 ## [1.12.0] - 2026-08-20
 
 ### ✨ Turbo 8-Step LoRA: One Click In Setup, Loaded By The Workflow
