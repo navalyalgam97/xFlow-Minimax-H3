@@ -1,46 +1,9 @@
 {
   "id": "c5beec59-2b88-4f3f-ba35-7640a58a9ba6",
   "revision": 0,
-  "last_node_id": 236,
-  "last_link_id": 277,
+  "last_node_id": 237,
+  "last_link_id": 280,
   "nodes": [
-    {
-      "id": 195,
-      "type": "CLIPLoader",
-      "pos": [
-        -1032.3327979409496,
-        379.8303556638168
-      ],
-      "size": [
-        495.8871826591876,
-        106
-      ],
-      "flags": {},
-      "order": 0,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "CLIP",
-          "type": "CLIP",
-          "links": [
-            259
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.76",
-        "Node name for S&R": "CLIPLoader"
-      },
-      "widgets_values": [
-        "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
-        "minimax",
-        "default"
-      ],
-      "color": "#f66744",
-      "bgcolor": "#2a2a2a"
-    },
     {
       "id": 196,
       "type": "VAELoader",
@@ -55,9 +18,20 @@
       "flags": {},
       "order": 1,
       "mode": 0,
-      "inputs": [],
+      "inputs": [
+        {
+          "localized_name": "vae_name",
+          "name": "vae_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "vae_name"
+          },
+          "link": null
+        }
+      ],
       "outputs": [
         {
+          "localized_name": "VAE",
           "name": "VAE",
           "type": "VAE",
           "links": [
@@ -67,49 +41,16 @@
         }
       ],
       "properties": {
+        "Node name for S&R": "VAELoader",
         "cnr_id": "comfy-core",
-        "ver": "0.3.76",
-        "Node name for S&R": "VAELoader"
+        "ver": "0.3.76"
       },
       "widgets_values": [
         "minimax_h3_video_vae_fp16.safetensors"
       ],
-      "color": "#f66744",
-      "bgcolor": "#2a2a2a"
-    },
-    {
-      "id": 194,
-      "type": "UNETLoader",
-      "pos": [
-        -1032.3327979409496,
-        217.83035566381673
-      ],
-      "size": [
-        495.8871826591876,
-        82
-      ],
-      "flags": {},
-      "order": 2,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "MODEL",
-          "type": "MODEL",
-          "links": [
-            274
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.76",
-        "Node name for S&R": "UNETLoader"
+      "widgets_values_named": {
+        "vae_name": "minimax_h3_video_vae_fp16.safetensors"
       },
-      "widgets_values": [
-        "h3/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
-        "default"
-      ],
       "color": "#f66744",
       "bgcolor": "#2a2a2a"
     },
@@ -132,14 +73,17 @@
       "inputs": [],
       "outputs": [],
       "properties": {
+        "Node name for S&R": "PixaromaLabel",
         "cnr_id": "ComfyUI-Pixaroma",
         "ver": "80b307e8d1882fd933959cb0ea94a26d143557b5",
-        "Node name for S&R": "PixaromaLabel",
         "aux_id": "pixaroma/ComfyUI-Pixaroma"
       },
       "widgets_values": [
         "{\"text\":\"Minimax H3 - text to video\",\"fontSize\":31,\"fontFamily\":\"Arial\",\"fontColor\":\"#ffffff\",\"textAlign\":\"left\",\"backgroundColor\":\"#f66744\",\"padding\":10,\"borderRadius\":0,\"opacity\":1,\"fontWeight\":\"normal\",\"lineHeight\":1}"
       ],
+      "widgets_values_named": {
+        "label_json": "{\"text\":\"Minimax H3 - text to video\",\"fontSize\":31,\"fontFamily\":\"Arial\",\"fontColor\":\"#ffffff\",\"textAlign\":\"left\",\"backgroundColor\":\"#f66744\",\"padding\":10,\"borderRadius\":0,\"opacity\":1,\"fontWeight\":\"normal\",\"lineHeight\":1}"
+      },
       "color": "rgba(0,0,0,0)",
       "bgcolor": "rgba(0,0,0,0)"
     },
@@ -157,17 +101,31 @@
       "flags": {},
       "order": 4,
       "mode": 0,
-      "inputs": [],
+      "inputs": [
+        {
+          "localized_name": "note_json",
+          "name": "note_json",
+          "type": "STRING",
+          "widget": {
+            "name": "note_json"
+          },
+          "link": null
+        }
+      ],
       "outputs": [],
       "properties": {
+        "Node name for S&R": "PixaromaNote",
         "cnr_id": "ComfyUI-Pixaroma",
-        "ver": "1227d9898f9d5137533df750611ca97e8c738f3d",
-        "Node name for S&R": "PixaromaNote"
+        "ver": "1227d9898f9d5137533df750611ca97e8c738f3d"
       },
       "widgets_values": [
         "{\"version\":1,\"content\":\"<h1>MODELS AND NODES USED IN THIS WORKFLOW</h1><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><hr class=\\\"pix-note-hr-solid\\\" style=\\\"color: #b8b8b8\\\"><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><h2><span data-ic=\\\"model-v1\\\" class=\\\"pix-note-ic\\\" contenteditable=\\\"false\\\" style=\\\"color: #f66744\\\"></span>&nbsp;Load Diffusion Model</h2><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n<span class=\\\"pix-note-btnblock\\\">\\n  <a class=\\\"pix-note-dl\\\" style=\\\"background-color: #f66744\\\" href=\\\"https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">Download minimax_h3_fl2va_pruned_int8_convrot.safetensors<span class=\\\"pix-note-btnsize\\\">19.5 GB</span></a>\\n</span>&nbsp;\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><div class=\\\"pix-note-folderhint\\\" style=\\\"color: #f66744\\\">Place in: ComfyUI/models/diffusion_models/h3</div><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>Create the <code>h3</code> folder if it does not exist.</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n<span class=\\\"pix-note-btnblock\\\">\\n  <a class=\\\"pix-note-rm\\\" style=\\\"background-color: #f66744\\\" href=\\\"https://huggingface.co/Comfy-Org/MiniMax-H3/tree/main/diffusion_models\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">More versions</a>\\n</span>&nbsp;<span class=\\\"pix-note-btnblock\\\"><a class=\\\"pix-note-rm\\\" style=\\\"background-color: #f66744\\\" href=\\\"https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">READ LICENSE</a></span>&nbsp;<span class=\\\"pix-note-btnblock\\\"><a class=\\\"pix-note-rm\\\" style=\\\"background-color: #f66744\\\" href=\\\"https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/QA-about-License.md\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">More About LICENSE</a></span>&nbsp;</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><hr class=\\\"pix-note-hr-solid\\\" style=\\\"color: #b8b8b8\\\"><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><h2><span data-ic=\\\"CLIP\\\" class=\\\"pix-note-ic\\\" contenteditable=\\\"false\\\" style=\\\"color: #f66744\\\"></span>&nbsp;Load CLIP</h2><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n<span class=\\\"pix-note-btnblock\\\">\\n  <a class=\\\"pix-note-dl\\\" style=\\\"background-color: #f66744\\\" href=\\\"https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">Download qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors<span class=\\\"pix-note-btnsize\\\">14.6 GB</span></a>\\n</span>&nbsp;\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><div class=\\\"pix-note-folderhint\\\" style=\\\"color: #f66744\\\">Place in: ComfyUI/models/text_encoders</div><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><hr class=\\\"pix-note-hr-solid\\\" style=\\\"color: #b8b8b8\\\"><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><h2><span data-ic=\\\"VAE\\\" class=\\\"pix-note-ic\\\" contenteditable=\\\"false\\\" style=\\\"color: #f66744\\\"></span>&nbsp;Load VAE</h2><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n<span class=\\\"pix-note-btnblock\\\">\\n  <a class=\\\"pix-note-dl\\\" style=\\\"background-color: #f66744\\\" href=\\\"https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_video_vae_fp16.safetensors\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">Download minimax_h3_video_vae_fp16.safetensors<span class=\\\"pix-note-btnsize\\\">4.9 GB</span></a>\\n</span>&nbsp;\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n<span class=\\\"pix-note-btnblock\\\">\\n  <a class=\\\"pix-note-dl\\\" style=\\\"background-color: #f66744\\\" href=\\\"https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_audio_vae_fp32.safetensors\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">Download minimax_h3_audio_vae_fp32.safetensors<span class=\\\"pix-note-btnsize\\\">577 MB</span></a>\\n</span>&nbsp;\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><div class=\\\"pix-note-folderhint\\\" style=\\\"color: #f66744\\\">Place in: ComfyUI/models/vae<br></div><hr class=\\\"pix-note-hr-solid\\\" style=\\\"color: #ffffff\\\"><h3>Custom Chat GPT</h3><p><span class=\\\"pix-note-btnblock\\\"><a class=\\\"pix-note-rm\\\" style=\\\"background-color: #f66744\\\" href=\\\"https://chatgpt.com/g/g-6a70726c663c81919ff3199d41c73f0e-minimax-h3-prompts\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">Custom ChatGPT for H3 Prompting (Beta)</a></span>&nbsp;</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><hr class=\\\"pix-note-hr-solid\\\" style=\\\"color: #b8b8b8\\\"><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p><span data-ic=\\\"warning-v1\\\" class=\\\"pix-note-ic\\\" contenteditable=\\\"false\\\" style=\\\"color: #f66744\\\"></span>&nbsp;After placing the files, restart ComfyUI or refresh model lists using the <b>R</b> shortcut.</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><hr class=\\\"pix-note-hr-solid\\\" style=\\\"color: #b8b8b8\\\"><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><h2><span data-ic=\\\"nodes-installed\\\" class=\\\"pix-note-ic\\\" contenteditable=\\\"false\\\" style=\\\"color: #f66744\\\"></span>&nbsp;Nodes Installed from Manager</h2><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><ul>\\n  <li>Pixaroma</li>\\n</ul><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><hr class=\\\"pix-note-hr-solid\\\" style=\\\"color: #b8b8b8\\\"><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><h2><span data-ic=\\\"pixaroma\\\" class=\\\"pix-note-ic\\\" contenteditable=\\\"false\\\" style=\\\"color: #f66744\\\"></span>&nbsp;Resources</h2><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n  <a class=\\\"pix-note-discord\\\" href=\\\"https://discord.com/invite/gggpkVgBf3\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">Join Discord</a>&nbsp;\\n  <a class=\\\"pix-note-yt\\\" href=\\\"https://www.youtube.com/@pixaroma\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">Pixaroma YouTube Channel</a>&nbsp;\\n</p>\",\"buttonColor\":\"#f66744\",\"lineColor\":\"#f66744\",\"width\":550.5611758382192,\"height\":768.8772678618772,\"backgroundColor\":\"#2a2a2a\"}",
         ""
       ],
+      "widgets_values_named": {
+        "note_json": "{\"version\":1,\"content\":\"<h1>MODELS AND NODES USED IN THIS WORKFLOW</h1><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><hr class=\\\"pix-note-hr-solid\\\" style=\\\"color: #b8b8b8\\\"><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><h2><span data-ic=\\\"model-v1\\\" class=\\\"pix-note-ic\\\" contenteditable=\\\"false\\\" style=\\\"color: #f66744\\\"></span>&nbsp;Load Diffusion Model</h2><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n<span class=\\\"pix-note-btnblock\\\">\\n  <a class=\\\"pix-note-dl\\\" style=\\\"background-color: #f66744\\\" href=\\\"https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/diffusion_models/minimax_h3_fl2va_pruned_int8_convrot.safetensors\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">Download minimax_h3_fl2va_pruned_int8_convrot.safetensors<span class=\\\"pix-note-btnsize\\\">19.5 GB</span></a>\\n</span>&nbsp;\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><div class=\\\"pix-note-folderhint\\\" style=\\\"color: #f66744\\\">Place in: ComfyUI/models/diffusion_models/h3</div><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>Create the <code>h3</code> folder if it does not exist.</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n<span class=\\\"pix-note-btnblock\\\">\\n  <a class=\\\"pix-note-rm\\\" style=\\\"background-color: #f66744\\\" href=\\\"https://huggingface.co/Comfy-Org/MiniMax-H3/tree/main/diffusion_models\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">More versions</a>\\n</span>&nbsp;<span class=\\\"pix-note-btnblock\\\"><a class=\\\"pix-note-rm\\\" style=\\\"background-color: #f66744\\\" href=\\\"https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/LICENSE\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">READ LICENSE</a></span>&nbsp;<span class=\\\"pix-note-btnblock\\\"><a class=\\\"pix-note-rm\\\" style=\\\"background-color: #f66744\\\" href=\\\"https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/main/docs/QA-about-License.md\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">More About LICENSE</a></span>&nbsp;</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><hr class=\\\"pix-note-hr-solid\\\" style=\\\"color: #b8b8b8\\\"><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><h2><span data-ic=\\\"CLIP\\\" class=\\\"pix-note-ic\\\" contenteditable=\\\"false\\\" style=\\\"color: #f66744\\\"></span>&nbsp;Load CLIP</h2><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n<span class=\\\"pix-note-btnblock\\\">\\n  <a class=\\\"pix-note-dl\\\" style=\\\"background-color: #f66744\\\" href=\\\"https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/text_encoders/qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">Download qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors<span class=\\\"pix-note-btnsize\\\">14.6 GB</span></a>\\n</span>&nbsp;\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><div class=\\\"pix-note-folderhint\\\" style=\\\"color: #f66744\\\">Place in: ComfyUI/models/text_encoders</div><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><hr class=\\\"pix-note-hr-solid\\\" style=\\\"color: #b8b8b8\\\"><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><h2><span data-ic=\\\"VAE\\\" class=\\\"pix-note-ic\\\" contenteditable=\\\"false\\\" style=\\\"color: #f66744\\\"></span>&nbsp;Load VAE</h2><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n<span class=\\\"pix-note-btnblock\\\">\\n  <a class=\\\"pix-note-dl\\\" style=\\\"background-color: #f66744\\\" href=\\\"https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_video_vae_fp16.safetensors\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">Download minimax_h3_video_vae_fp16.safetensors<span class=\\\"pix-note-btnsize\\\">4.9 GB</span></a>\\n</span>&nbsp;\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n<span class=\\\"pix-note-btnblock\\\">\\n  <a class=\\\"pix-note-dl\\\" style=\\\"background-color: #f66744\\\" href=\\\"https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_audio_vae_fp32.safetensors\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">Download minimax_h3_audio_vae_fp32.safetensors<span class=\\\"pix-note-btnsize\\\">577 MB</span></a>\\n</span>&nbsp;\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><div class=\\\"pix-note-folderhint\\\" style=\\\"color: #f66744\\\">Place in: ComfyUI/models/vae<br></div><hr class=\\\"pix-note-hr-solid\\\" style=\\\"color: #ffffff\\\"><h3>Custom Chat GPT</h3><p><span class=\\\"pix-note-btnblock\\\"><a class=\\\"pix-note-rm\\\" style=\\\"background-color: #f66744\\\" href=\\\"https://chatgpt.com/g/g-6a70726c663c81919ff3199d41c73f0e-minimax-h3-prompts\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">Custom ChatGPT for H3 Prompting (Beta)</a></span>&nbsp;</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><hr class=\\\"pix-note-hr-solid\\\" style=\\\"color: #b8b8b8\\\"><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p><span data-ic=\\\"warning-v1\\\" class=\\\"pix-note-ic\\\" contenteditable=\\\"false\\\" style=\\\"color: #f66744\\\"></span>&nbsp;After placing the files, restart ComfyUI or refresh model lists using the <b>R</b> shortcut.</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><hr class=\\\"pix-note-hr-solid\\\" style=\\\"color: #b8b8b8\\\"><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><h2><span data-ic=\\\"nodes-installed\\\" class=\\\"pix-note-ic\\\" contenteditable=\\\"false\\\" style=\\\"color: #f66744\\\"></span>&nbsp;Nodes Installed from Manager</h2><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><ul>\\n  <li>Pixaroma</li>\\n</ul><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><hr class=\\\"pix-note-hr-solid\\\" style=\\\"color: #b8b8b8\\\"><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><h2><span data-ic=\\\"pixaroma\\\" class=\\\"pix-note-ic\\\" contenteditable=\\\"false\\\" style=\\\"color: #f66744\\\"></span>&nbsp;Resources</h2><p>\\n\\n</p><p>\\n\\n</p><p>\\n\\n</p><p>\\n  <a class=\\\"pix-note-discord\\\" href=\\\"https://discord.com/invite/gggpkVgBf3\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">Join Discord</a>&nbsp;\\n  <a class=\\\"pix-note-yt\\\" href=\\\"https://www.youtube.com/@pixaroma\\\" target=\\\"_blank\\\" rel=\\\"noopener noreferrer\\\">Pixaroma YouTube Channel</a>&nbsp;\\n</p>\",\"buttonColor\":\"#f66744\",\"lineColor\":\"#f66744\",\"width\":550.5611758382192,\"height\":768.8772678618772,\"backgroundColor\":\"#2a2a2a\"}",
+        "note_dom": ""
+      },
       "color": "#1d1d1d",
       "bgcolor": "#2a2a2a"
     },
@@ -188,6 +146,7 @@
       "inputs": [],
       "outputs": [
         {
+          "localized_name": "frames",
           "name": "frames",
           "type": "INT",
           "links": [
@@ -195,6 +154,7 @@
           ]
         },
         {
+          "localized_name": "seconds",
           "name": "seconds",
           "type": "FLOAT",
           "links": null
@@ -202,9 +162,9 @@
       ],
       "title": "2. Select Duration",
       "properties": {
+        "Node name for S&R": "PixaromaDuration",
         "cnr_id": "ComfyUI-Pixaroma",
         "ver": "c6efed39bfc2e566fc5542044d728cca7d2e1a62",
-        "Node name for S&R": "PixaromaDuration",
         "durationState": {
           "seconds": 4,
           "fps": 24,
@@ -233,6 +193,7 @@
         }
       },
       "widgets_values": [],
+      "widgets_values_named": {},
       "color": "#14436c",
       "bgcolor": "#2a2a2a"
     },
@@ -248,15 +209,17 @@
         46
       ],
       "flags": {},
-      "order": 13,
+      "order": 14,
       "mode": 0,
       "inputs": [
         {
+          "localized_name": "samples",
           "name": "samples",
           "type": "LATENT",
           "link": 268
         },
         {
+          "localized_name": "vae",
           "name": "vae",
           "type": "VAE",
           "link": 270
@@ -264,6 +227,7 @@
       ],
       "outputs": [
         {
+          "localized_name": "IMAGE",
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
@@ -272,11 +236,10 @@
         }
       ],
       "properties": {
+        "Node name for S&R": "VAEDecode",
         "cnr_id": "comfy-core",
-        "ver": "0.30.1",
-        "Node name for S&R": "VAEDecode"
+        "ver": "0.30.1"
       },
-      "widgets_values": [],
       "color": "#1d1d1d",
       "bgcolor": "#2a2a2a"
     },
@@ -292,15 +255,17 @@
         46
       ],
       "flags": {},
-      "order": 14,
+      "order": 15,
       "mode": 0,
       "inputs": [
         {
+          "localized_name": "samples",
           "name": "samples",
           "type": "LATENT",
           "link": 269
         },
         {
+          "localized_name": "vae",
           "name": "vae",
           "type": "VAE",
           "link": 267
@@ -308,6 +273,7 @@
       ],
       "outputs": [
         {
+          "localized_name": "AUDIO",
           "name": "AUDIO",
           "type": "AUDIO",
           "links": [
@@ -316,11 +282,10 @@
         }
       ],
       "properties": {
+        "Node name for S&R": "VAEDecodeAudio",
         "cnr_id": "comfy-core",
-        "ver": "0.30.1",
-        "Node name for S&R": "VAEDecodeAudio"
+        "ver": "0.30.1"
       },
-      "widgets_values": [],
       "color": "#1d1d1d",
       "bgcolor": "#2a2a2a"
     },
@@ -336,10 +301,11 @@
         26
       ],
       "flags": {},
-      "order": 11,
+      "order": 12,
       "mode": 0,
       "inputs": [
         {
+          "localized_name": "conditioning",
           "name": "conditioning",
           "type": "CONDITIONING",
           "link": 263
@@ -347,6 +313,7 @@
       ],
       "outputs": [
         {
+          "localized_name": "CONDITIONING",
           "name": "CONDITIONING",
           "type": "CONDITIONING",
           "links": [
@@ -355,11 +322,10 @@
         }
       ],
       "properties": {
+        "Node name for S&R": "ConditioningZeroOut",
         "cnr_id": "comfy-core",
-        "ver": "0.30.1",
-        "Node name for S&R": "ConditioningZeroOut"
+        "ver": "0.30.1"
       },
-      "widgets_values": [],
       "color": "#1d1d1d",
       "bgcolor": "#2a2a2a"
     },
@@ -375,26 +341,64 @@
         688.766243028838
       ],
       "flags": {},
-      "order": 15,
+      "order": 16,
       "mode": 0,
       "inputs": [
         {
+          "localized_name": "video_frames",
           "name": "video_frames",
           "type": "IMAGE",
           "link": 265
         },
         {
+          "localized_name": "audio",
           "name": "audio",
           "shape": 7,
           "type": "AUDIO",
           "link": 266
+        },
+        {
+          "localized_name": "fps",
+          "name": "fps",
+          "type": "FLOAT",
+          "widget": {
+            "name": "fps"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "filename_prefix",
+          "name": "filename_prefix",
+          "type": "STRING",
+          "widget": {
+            "name": "filename_prefix"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "save_mode",
+          "name": "save_mode",
+          "type": "COMBO",
+          "widget": {
+            "name": "save_mode"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "trim_to_audio",
+          "name": "trim_to_audio",
+          "type": "BOOLEAN",
+          "widget": {
+            "name": "trim_to_audio"
+          },
+          "link": null
         }
       ],
       "outputs": [],
       "properties": {
+        "Node name for S&R": "PixaromaSaveMp4",
         "cnr_id": "ComfyUI-Pixaroma",
         "ver": "a13e16f26ce1b1de096fe97ded9b95ec3d2b62ab",
-        "Node name for S&R": "PixaromaSaveMp4",
         "pixMp4Video": {
           "filename": "Video_00001.mp4",
           "subfolder": "",
@@ -408,6 +412,13 @@
         false,
         ""
       ],
+      "widgets_values_named": {
+        "fps": 24,
+        "filename_prefix": "Video",
+        "save_mode": "save",
+        "trim_to_audio": false,
+        "pixaroma_video_preview": ""
+      },
       "color": "#1d1d1d",
       "bgcolor": "#2a2a2a"
     },
@@ -430,9 +441,9 @@
       "inputs": [],
       "outputs": [],
       "properties": {
+        "Node name for S&R": "PixaromaRunTimer",
         "cnr_id": "ComfyUI-Pixaroma",
         "ver": "13f9d5d1da21e09515a5843e9392c3f69a435297",
-        "Node name for S&R": "PixaromaRunTimer",
         "runTimerState": {
           "version": 1,
           "color": "#f66744",
@@ -443,70 +454,6 @@
         },
         "runTimerLastMs": 70667.20000000298
       },
-      "widgets_values": [],
-      "color": "#1d1d1d",
-      "bgcolor": "#2a2a2a"
-    },
-    {
-      "id": 225,
-      "type": "KSampler",
-      "pos": [
-        287.1658678737215,
-        499.83035566381676
-      ],
-      "size": [
-        270,
-        262
-      ],
-      "flags": {},
-      "order": 12,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "model",
-          "type": "MODEL",
-          "link": 274
-        },
-        {
-          "name": "positive",
-          "type": "CONDITIONING",
-          "link": 262
-        },
-        {
-          "name": "negative",
-          "type": "CONDITIONING",
-          "link": 261
-        },
-        {
-          "name": "latent_image",
-          "type": "LATENT",
-          "link": 275
-        }
-      ],
-      "outputs": [
-        {
-          "name": "LATENT",
-          "type": "LATENT",
-          "links": [
-            268,
-            269
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.30.1",
-        "Node name for S&R": "KSampler"
-      },
-      "widgets_values": [
-        28961431605192,
-        "randomize",
-        20,
-        1,
-        "res_multistep",
-        "simple",
-        1
-      ],
       "color": "#1d1d1d",
       "bgcolor": "#2a2a2a"
     },
@@ -522,32 +469,37 @@
         220
       ],
       "flags": {},
-      "order": 10,
+      "order": 11,
       "mode": 0,
       "inputs": [
         {
+          "localized_name": "clip",
           "name": "clip",
           "type": "CLIP",
-          "link": 259
+          "link": 279
         },
         {
+          "localized_name": "vae",
           "name": "vae",
           "type": "VAE",
           "link": 260
         },
         {
+          "localized_name": "first_frame",
           "name": "first_frame",
           "shape": 7,
           "type": "IMAGE",
           "link": null
         },
         {
+          "localized_name": "last_frame",
           "name": "last_frame",
           "shape": 7,
           "type": "IMAGE",
           "link": null
         },
         {
+          "localized_name": "prompt",
           "name": "prompt",
           "type": "STRING",
           "widget": {
@@ -556,6 +508,7 @@
           "link": 277
         },
         {
+          "localized_name": "width",
           "name": "width",
           "type": "INT",
           "widget": {
@@ -564,6 +517,7 @@
           "link": 271
         },
         {
+          "localized_name": "height",
           "name": "height",
           "type": "INT",
           "widget": {
@@ -572,6 +526,7 @@
           "link": 272
         },
         {
+          "localized_name": "length",
           "name": "length",
           "type": "INT",
           "widget": {
@@ -582,6 +537,7 @@
       ],
       "outputs": [
         {
+          "localized_name": "positive",
           "name": "positive",
           "type": "CONDITIONING",
           "links": [
@@ -590,6 +546,7 @@
           ]
         },
         {
+          "localized_name": "LATENT",
           "name": "LATENT",
           "type": "LATENT",
           "links": [
@@ -598,9 +555,9 @@
         }
       ],
       "properties": {
+        "Node name for S&R": "MiniMaxH3ImageToVideo",
         "cnr_id": "comfy-core",
-        "ver": "0.30.1",
-        "Node name for S&R": "MiniMaxH3ImageToVideo"
+        "ver": "0.30.1"
       },
       "widgets_values": [
         "",
@@ -608,6 +565,12 @@
         768,
         73
       ],
+      "widgets_values_named": {
+        "prompt": "",
+        "width": 1344,
+        "height": 768,
+        "length": 73
+      },
       "color": "#1d1d1d",
       "bgcolor": "#2a2a2a"
     },
@@ -625,9 +588,20 @@
       "flags": {},
       "order": 7,
       "mode": 0,
-      "inputs": [],
+      "inputs": [
+        {
+          "localized_name": "vae_name",
+          "name": "vae_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "vae_name"
+          },
+          "link": null
+        }
+      ],
       "outputs": [
         {
+          "localized_name": "VAE",
           "name": "VAE",
           "type": "VAE",
           "links": [
@@ -636,33 +610,94 @@
         }
       ],
       "properties": {
+        "Node name for S&R": "VAELoader",
         "cnr_id": "comfy-core",
-        "ver": "0.3.76",
-        "Node name for S&R": "VAELoader"
+        "ver": "0.3.76"
       },
       "widgets_values": [
         "minimax_h3_audio_vae_fp32.safetensors"
       ],
+      "widgets_values_named": {
+        "vae_name": "minimax_h3_audio_vae_fp32.safetensors"
+      },
       "color": "#f66744",
+      "bgcolor": "#2a2a2a"
+    },
+    {
+      "id": 236,
+      "type": "PixaromaPrompt",
+      "pos": [
+        -244.85923218973232,
+        354.3375037138053
+      ],
+      "size": [
+        495.8871826591876,
+        407.4928519500115
+      ],
+      "flags": {},
+      "order": 8,
+      "mode": 0,
+      "inputs": [
+        {
+          "label": "text",
+          "localized_name": "text_in",
+          "name": "text_in",
+          "shape": 7,
+          "type": "STRING",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "text",
+          "name": "text",
+          "type": "STRING",
+          "links": [
+            277
+          ]
+        }
+      ],
+      "title": "3. Add a prompt",
+      "properties": {
+        "Node name for S&R": "PixaromaPrompt",
+        "cnr_id": "ComfyUI-Pixaroma",
+        "ver": "f9c6df78d613ea11ca28b641a50160e251cc00e6",
+        "promptState": {
+          "text": "integrated_multimodal_description: [Shot 1] Live-action, cinematic close-up vlog style, a beautiful 20-year-old Romanian woman fills the frame from the shoulders up, looking directly into the lens as if filming herself with a phone at arm\u2019s length. She has long glossy black hair, clear natural makeup, expressive eyes, and two anatomically real white rabbit ears growing naturally from the top of her head instead of human ears, with soft fur and subtle muscle-driven movement at their bases. In a natural outdoor setting with softly blurred greenery in the background, she keeps steady eye contact, lifts one hand to play gently with the front section of her hair, and gives a small relaxed smile; as she moves, one rabbit ear turns slightly outward, the other twitches once, and both ears rise and settle naturally. She adds a light playful head tilt while the handheld camera holds a tight close-up with small amplitude, ending with her fingers resting lightly in her hair and her gaze still fixed on the viewer.\n\noverall_soundscape: Soft natural outdoor ambience with a faint breeze, distant leaves moving gently, subtle hair and clothing rustle, and quiet natural breathing.\n\nnon_diegetic_music: Light acoustic guitar plucks at a gentle mid-tempo with a soft warm synth pad underneath, kept low in volume and steady throughout.",
+          "order": "mine",
+          "sep": ", ",
+          "accent": null,
+          "showExpanded": true,
+          "lastRun": "integrated_multimodal_description: [Shot 1] Live-action, cinematic close-up vlog style, a beautiful 20-year-old Romanian woman fills the frame from the shoulders up, looking directly into the lens as if filming herself with a phone at arm\u2019s length. She has long glossy black hair, clear natural makeup, expressive eyes, and two anatomically real white rabbit ears growing naturally from the top of her head instead of human ears, with soft fur and subtle muscle-driven movement at their bases. In a natural outdoor setting with softly blurred greenery in the background, she keeps steady eye contact, lifts one hand to play gently with the front section of her hair, and gives a small relaxed smile; as she moves, one rabbit ear turns slightly outward, the other twitches once, and both ears rise and settle naturally. She adds a light playful head tilt while the handheld camera holds a tight close-up with small amplitude, ending with her fingers resting lightly in her hair and her gaze still fixed on the viewer.\n\noverall_soundscape: Soft natural outdoor ambience with a faint breeze, distant leaves moving gently, subtle hair and clothing rustle, and quiet natural breathing.\n\nnon_diegetic_music: Light acoustic guitar plucks at a gentle mid-tempo with a soft warm synth pad underneath, kept low in volume and steady throughout."
+        }
+      },
+      "widgets_values": [
+        ""
+      ],
+      "widgets_values_named": {
+        "pix_prompt_ui": ""
+      },
+      "color": "#14436c",
       "bgcolor": "#2a2a2a"
     },
     {
       "id": 223,
       "type": "PixaromaSizes",
       "pos": [
-        -508.71802350460644,
-        217.83035566381676
+        -502.8573312026802,
+        216.85918730344054
       ],
       "size": [
         240,
         534
       ],
       "flags": {},
-      "order": 8,
+      "order": 9,
       "mode": 0,
       "inputs": [],
       "outputs": [
         {
+          "localized_name": "width",
           "name": "width",
           "type": "INT",
           "links": [
@@ -670,6 +705,7 @@
           ]
         },
         {
+          "localized_name": "height",
           "name": "height",
           "type": "INT",
           "links": [
@@ -679,9 +715,9 @@
       ],
       "title": "1. Pick Orientation and Size",
       "properties": {
+        "Node name for S&R": "PixaromaSizes",
         "cnr_id": "ComfyUI-Pixaroma",
         "ver": "a13e16f26ce1b1de096fe97ded9b95ec3d2b62ab",
-        "Node name for S&R": "PixaromaSizes",
         "sizesState": "{\"version\":1,\"sizes\":[[608,352],[736,416],[864,480],[960,544],[1056,608],[1152,640],[1216,672],[1280,736],[1344,768],[1376,768],[1504,832],[1664,928],[1824,1024],[1920,1088]],\"selected\":2,\"orientation\":\"portrait\",\"snap\":32,\"accent\":null,\"collapsed\":false,\"starred\":[\"480x864\",\"768x1344\",\"672x1216\"],\"w\":480,\"h\":864}"
       },
       "widgets_values": [
@@ -759,71 +795,459 @@
           "h": 864
         }
       ],
+      "widgets_values_named": {
+        "sizes_ui": {
+          "version": 1,
+          "sizes": [
+            [
+              608,
+              352
+            ],
+            [
+              736,
+              416
+            ],
+            [
+              864,
+              480
+            ],
+            [
+              960,
+              544
+            ],
+            [
+              1056,
+              608
+            ],
+            [
+              1152,
+              640
+            ],
+            [
+              1216,
+              672
+            ],
+            [
+              1280,
+              736
+            ],
+            [
+              1344,
+              768
+            ],
+            [
+              1376,
+              768
+            ],
+            [
+              1504,
+              832
+            ],
+            [
+              1664,
+              928
+            ],
+            [
+              1824,
+              1024
+            ],
+            [
+              1920,
+              1088
+            ]
+          ],
+          "selected": 2,
+          "orientation": "portrait",
+          "snap": 32,
+          "accent": null,
+          "collapsed": false,
+          "starred": [
+            "480x864",
+            "768x1344",
+            "672x1216"
+          ],
+          "w": 480,
+          "h": 864
+        }
+      },
       "color": "#14436c",
       "bgcolor": "#2a2a2a"
     },
     {
-      "id": 236,
-      "type": "PixaromaPrompt",
+      "id": 194,
+      "type": "UNETLoader",
       "pos": [
-        -244.85923218973232,
-        354.3375037138053
+        -1032.3327979409496,
+        217.83035566381673
       ],
       "size": [
         495.8871826591876,
-        407.4928519500115
+        82
       ],
       "flags": {},
-      "order": 9,
+      "order": 2,
       "mode": 0,
       "inputs": [
         {
-          "label": "text",
-          "name": "text_in",
-          "shape": 7,
-          "type": "STRING",
+          "localized_name": "unet_name",
+          "name": "unet_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "unet_name"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "weight_dtype",
+          "name": "weight_dtype",
+          "type": "COMBO",
+          "widget": {
+            "name": "weight_dtype"
+          },
           "link": null
         }
       ],
       "outputs": [
         {
-          "name": "text",
-          "type": "STRING",
+          "localized_name": "MODEL",
+          "name": "MODEL",
+          "type": "MODEL",
           "links": [
-            277
+            278
           ]
         }
       ],
-      "title": "3. Add a prompt",
       "properties": {
-        "cnr_id": "ComfyUI-Pixaroma",
-        "ver": "f9c6df78d613ea11ca28b641a50160e251cc00e6",
-        "Node name for S&R": "PixaromaPrompt",
-        "promptState": {
-          "text": "integrated_multimodal_description: [Shot 1] Live-action, cinematic close-up vlog style, a beautiful 20-year-old Romanian woman fills the frame from the shoulders up, looking directly into the lens as if filming herself with a phone at arm’s length. She has long glossy black hair, clear natural makeup, expressive eyes, and two anatomically real white rabbit ears growing naturally from the top of her head instead of human ears, with soft fur and subtle muscle-driven movement at their bases. In a natural outdoor setting with softly blurred greenery in the background, she keeps steady eye contact, lifts one hand to play gently with the front section of her hair, and gives a small relaxed smile; as she moves, one rabbit ear turns slightly outward, the other twitches once, and both ears rise and settle naturally. She adds a light playful head tilt while the handheld camera holds a tight close-up with small amplitude, ending with her fingers resting lightly in her hair and her gaze still fixed on the viewer.\n\noverall_soundscape: Soft natural outdoor ambience with a faint breeze, distant leaves moving gently, subtle hair and clothing rustle, and quiet natural breathing.\n\nnon_diegetic_music: Light acoustic guitar plucks at a gentle mid-tempo with a soft warm synth pad underneath, kept low in volume and steady throughout.",
-          "order": "mine",
-          "sep": ", ",
-          "accent": null,
-          "showExpanded": true,
-          "lastRun": "integrated_multimodal_description: [Shot 1] Live-action, cinematic close-up vlog style, a beautiful 20-year-old Romanian woman fills the frame from the shoulders up, looking directly into the lens as if filming herself with a phone at arm’s length. She has long glossy black hair, clear natural makeup, expressive eyes, and two anatomically real white rabbit ears growing naturally from the top of her head instead of human ears, with soft fur and subtle muscle-driven movement at their bases. In a natural outdoor setting with softly blurred greenery in the background, she keeps steady eye contact, lifts one hand to play gently with the front section of her hair, and gives a small relaxed smile; as she moves, one rabbit ear turns slightly outward, the other twitches once, and both ears rise and settle naturally. She adds a light playful head tilt while the handheld camera holds a tight close-up with small amplitude, ending with her fingers resting lightly in her hair and her gaze still fixed on the viewer.\n\noverall_soundscape: Soft natural outdoor ambience with a faint breeze, distant leaves moving gently, subtle hair and clothing rustle, and quiet natural breathing.\n\nnon_diegetic_music: Light acoustic guitar plucks at a gentle mid-tempo with a soft warm synth pad underneath, kept low in volume and steady throughout."
-        }
+        "Node name for S&R": "UNETLoader",
+        "cnr_id": "comfy-core",
+        "ver": "0.3.76"
       },
       "widgets_values": [
-        ""
+        "h3/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "default"
       ],
-      "color": "#14436c",
+      "widgets_values_named": {
+        "unet_name": "h3/minimax_h3_fl2va_pruned_int8_convrot.safetensors",
+        "weight_dtype": "default"
+      },
+      "color": "#f66744",
+      "bgcolor": "#2a2a2a"
+    },
+    {
+      "id": 225,
+      "type": "KSampler",
+      "pos": [
+        287.1658678737215,
+        499.83035566381676
+      ],
+      "size": [
+        270,
+        262
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "model",
+          "name": "model",
+          "type": "MODEL",
+          "link": 274
+        },
+        {
+          "localized_name": "positive",
+          "name": "positive",
+          "type": "CONDITIONING",
+          "link": 262
+        },
+        {
+          "localized_name": "negative",
+          "name": "negative",
+          "type": "CONDITIONING",
+          "link": 261
+        },
+        {
+          "localized_name": "latent_image",
+          "name": "latent_image",
+          "type": "LATENT",
+          "link": 275
+        },
+        {
+          "localized_name": "seed",
+          "name": "seed",
+          "type": "INT",
+          "widget": {
+            "name": "seed"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "steps",
+          "name": "steps",
+          "type": "INT",
+          "widget": {
+            "name": "steps"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "cfg",
+          "name": "cfg",
+          "type": "FLOAT",
+          "widget": {
+            "name": "cfg"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "sampler_name",
+          "name": "sampler_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "sampler_name"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "scheduler",
+          "name": "scheduler",
+          "type": "COMBO",
+          "widget": {
+            "name": "scheduler"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "denoise",
+          "name": "denoise",
+          "type": "FLOAT",
+          "widget": {
+            "name": "denoise"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "LATENT",
+          "name": "LATENT",
+          "type": "LATENT",
+          "links": [
+            268,
+            269
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "KSampler",
+        "cnr_id": "comfy-core",
+        "ver": "0.30.1"
+      },
+      "widgets_values": [
+        28961431605192,
+        "randomize",
+        12,
+        1,
+        "euler",
+        "beta",
+        1
+      ],
+      "widgets_values_named": {
+        "seed": 28961431605192,
+        "control_after_generate": "randomize",
+        "steps": 12,
+        "cfg": 1,
+        "sampler_name": "euler",
+        "scheduler": "beta",
+        "denoise": 1
+      },
+      "color": "#1d1d1d",
+      "bgcolor": "#2a2a2a"
+    },
+    {
+      "id": 195,
+      "type": "CLIPLoader",
+      "pos": [
+        -1032.3327979409496,
+        379.8303556638168
+      ],
+      "size": [
+        495.8871826591876,
+        106
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "clip_name",
+          "name": "clip_name",
+          "type": "COMBO",
+          "widget": {
+            "name": "clip_name"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "type",
+          "name": "type",
+          "type": "COMBO",
+          "widget": {
+            "name": "type"
+          },
+          "link": null
+        },
+        {
+          "localized_name": "device",
+          "name": "device",
+          "shape": 7,
+          "type": "COMBO",
+          "widget": {
+            "name": "device"
+          },
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "CLIP",
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            280
+          ]
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CLIPLoader",
+        "cnr_id": "comfy-core",
+        "ver": "0.3.76"
+      },
+      "widgets_values": [
+        "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "minimax",
+        "default"
+      ],
+      "widgets_values_named": {
+        "clip_name": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+        "type": "minimax",
+        "device": "default"
+      },
+      "color": "#f66744",
+      "bgcolor": "#2a2a2a"
+    },
+    {
+      "id": 237,
+      "type": "PixaromaLoraLoader",
+      "pos": [
+        -1035.3315180897653,
+        826.9506985295758
+      ],
+      "size": [
+        516.3454031529456,
+        128
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "localized_name": "model",
+          "name": "model",
+          "type": "MODEL",
+          "link": 278
+        },
+        {
+          "localized_name": "clip",
+          "name": "clip",
+          "shape": 7,
+          "type": "CLIP",
+          "link": 280
+        }
+      ],
+      "outputs": [
+        {
+          "localized_name": "MODEL",
+          "name": "MODEL",
+          "type": "MODEL",
+          "links": [
+            274
+          ]
+        },
+        {
+          "localized_name": "CLIP",
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            279
+          ]
+        },
+        {
+          "localized_name": "triggers",
+          "name": "triggers",
+          "type": "STRING",
+          "links": null
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PixaromaLoraLoader",
+        "loraLoaderState": "{\"version\":1,\"loras\":[{\"id\":\"l31da47d3\",\"name\":\"\",\"on\":true,\"sm\":0.75,\"sc\":0.75,\"triggers\":[],\"custom\":[]}],\"sep\":\", \",\"step\":0.05,\"defStrength\":1,\"linkStrength\":true,\"civitai\":true,\"thumbs\":true,\"hideExt\":true,\"accent\":null,\"cacheMode\":\"last\"}"
+      },
+      "widgets_values": [
+        {
+          "version": 1,
+          "loras": [
+            {
+              "id": "l31da47d3",
+              "name": "",
+              "on": true,
+              "sm": 0.75,
+              "sc": 0.75,
+              "triggers": [],
+              "custom": []
+            }
+          ],
+          "sep": ", ",
+          "step": 0.05,
+          "defStrength": 1,
+          "linkStrength": true,
+          "civitai": true,
+          "thumbs": true,
+          "hideExt": true,
+          "accent": null,
+          "cacheMode": "last"
+        }
+      ],
+      "widgets_values_named": {
+        "loras_ui": {
+          "version": 1,
+          "loras": [
+            {
+              "id": "l31da47d3",
+              "name": "",
+              "on": true,
+              "sm": 0.75,
+              "sc": 0.75,
+              "triggers": [],
+              "custom": []
+            }
+          ],
+          "sep": ", ",
+          "step": 0.05,
+          "defStrength": 1,
+          "linkStrength": true,
+          "civitai": true,
+          "thumbs": true,
+          "hideExt": true,
+          "accent": null,
+          "cacheMode": "last"
+        }
+      },
+      "color": "#1d1d1d",
       "bgcolor": "#2a2a2a"
     }
   ],
   "links": [
-    [
-      259,
-      195,
-      0,
-      222,
-      0,
-      "CLIP"
-    ],
     [
       260,
       196,
@@ -922,7 +1346,7 @@
     ],
     [
       274,
-      194,
+      237,
       0,
       225,
       0,
@@ -951,16 +1375,40 @@
       222,
       4,
       "STRING"
+    ],
+    [
+      278,
+      194,
+      0,
+      237,
+      0,
+      "MODEL"
+    ],
+    [
+      279,
+      237,
+      1,
+      222,
+      0,
+      "CLIP"
+    ],
+    [
+      280,
+      195,
+      0,
+      237,
+      1,
+      "CLIP"
     ]
   ],
   "groups": [],
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.7627768444385671,
+      "scale": 0.7960500154297101,
       "offset": [
-        1723.9735097627722,
-        151.04954529157223
+        1313.5579188696242,
+        -258.2737096980291
       ]
     },
     "frontendVersion": "1.47.12",
