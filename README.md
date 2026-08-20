@@ -3,7 +3,7 @@
 <div align="center">
 
 ![xFlowOne Banner](https://img.shields.io/badge/xFlowOne-Minimax_H3-00ff66?style=for-the-badge&logo=comfyui&logoColor=black)
-![Version](https://img.shields.io/badge/version-1.11.2-00ff66?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.12.0-00ff66?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
 
 *A single-node, 1:1 `xFlowOne` design system UI for Minimax H3 Video Generation in ComfyUI V2.*
@@ -62,7 +62,15 @@ All required models can be managed and downloaded automatically via the built-in
 
 ## 📜 Changelog
 
-### Version 1.11.2 (Latest Release)
+### Version 1.12.0 (Latest Release)
+
+> Turbo 8-step LoRA, one click in Setup, loaded by the T2V workflow.
+
+- ⬇️ **Turbo LoRA in the Models & Setup Manager**: `minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors` (1.96 GB) downloads into `ComfyUI/models/loras/` with the same pause / resume / delete / progress as the weights. Optional — a missing copy never blocks a run.
+- 🔗 **It loads in the LoRA loader itself**: once installed it takes a slot in the **Add LoRA** drawer, and the drawer's rows now reach the submitted prompt through the workflow's `PixaromaLoraLoader`.
+- 🐛 **The LoRA loader's MODEL output went nowhere**: `KSampler` was still fed straight from `UNETLoader`, so a LoRA touched CLIP and left the diffusion model alone. Now rewired.
+
+### Version 1.11.2
 
 > Fixes "no usable sound file selected" on a fresh machine.
 

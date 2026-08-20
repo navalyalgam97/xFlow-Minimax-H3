@@ -2,6 +2,20 @@
 
 All notable changes to the **xFlowOne · Minimax H3** single-node video interface for ComfyUI.
 
+## [1.12.0] - 2026-08-20
+
+### ✨ Turbo 8-Step LoRA: One Click In Setup, Loaded By The Workflow
+
+The T2V workflow now carries a `PixaromaLoraLoader`, and the LoRA it wants is a button in the Setup pile instead of a manual download.
+
+- **⬇️ Turbo LoRA In The Models & Setup Manager**: `minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors` (1.96 GB, from `lightx2v/Minimax-h3-Turbo`) is now a card in Setup with the same download / pause / resume / delete / progress the weights get. It lands in `ComfyUI/models/loras/`. Deliberately **not** part of `validate_minimax_environment` — it is optional, so a missing copy never blocks a run.
+- **🔗 It Loads In The LoRA Loader Itself**: the first time it reports installed, the filename is written into a slot in the **Add LoRA** drawer, so the next run actually uses it. A LoRA picked before the folder listing refreshes still shows in its row rather than reading "Select LoRA safetensors...".
+- **🧩 LoRA Rows Reach The Submitted Prompt**: the payload builder now has a `PixaromaLoraLoader` branch and a `loraLoaderState` patcher. The node's state lives on `node.properties` as a **JSON string**, and the generic state carry only handles objects — so without this the loader ran with whatever the template was saved with, ignoring the drawer entirely.
+- **🐛 The LoRA Loader's MODEL Output Went Nowhere**: in the updated T2V template the `KSampler` was still fed straight from `UNETLoader`, with only CLIP routed through the LoRA loader. Every LoRA would have tuned how trigger words are read and left the diffusion model untouched. `KSampler.model` now comes from the LoRA loader.
+- **📁 Template Ships With Empty LoRA Rows**: same reason sample filenames were cleared in 1.11.2 — a name baked into a template resolves on no other machine.
+
+---
+
 ## [1.11.2] - 2026-08-13
 
 ### 🐛 Workflow Templates Shipped With Sample Filenames Baked In
