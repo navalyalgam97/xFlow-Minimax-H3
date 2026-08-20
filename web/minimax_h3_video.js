@@ -144,8 +144,23 @@ const FALLBACK_MODELS = [
     folder: "ComfyUI/models/vae/",
     url: "https://huggingface.co/Comfy-Org/MiniMax-H3/resolve/main/vae/minimax_h3_audio_vae_fp32.safetensors",
     installed: false, status: "idle", downloaded_bytes: 0, total_bytes: 0, percent: 0, speed_mbps: 0
+  },
+  {
+    id: "turbo_lora",
+    name: "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+    title: "Minimax H3 Turbo 8-Step LoRA (Optional)",
+    approx_size_gb: "1.96 GB",
+    folder: "ComfyUI/models/loras/",
+    url: "https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/main/minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors",
+    installed: false, status: "idle", downloaded_bytes: 0, total_bytes: 0, percent: 0, speed_mbps: 0
   }
 ];
+
+// The one model in the Setup pile that is a LoRA rather than a weight: it is
+// attached to the workflow's LoRA loader instead of a *Loader node, so the
+// front end has to put its filename into a LoRA slot once it is installed.
+const TURBO_LORA_ID = "turbo_lora";
+const TURBO_LORA_NAME = "minimax_h3_fl2v_turbo_8step_v1.0_comfyui_bf16.safetensors";
 
 // Minimal Vector SVG Path Library
 const ICONS = {
@@ -824,6 +839,23 @@ function patchPixaromaState(stateKey, state, params) {
       break;
     }
 
+    case "loraLoaderState": {
+      // The drawer is the source of truth for which LoRAs run. Rows keep the
+      // template's shape (Pixaroma reads on/sm/sc), only the picks change, and
+      // an empty drawer leaves the loader with nothing to apply - model and
+      // clip pass straight through.
+      const picks = (params.loras || []).filter(l => l && l.name);
+      const shape = (state.loras && state.loras[0]) || {};
+      state.loras = picks.map((slot, i) => Object.assign({}, shape, {
+        id: `mmh3_${i}`,
+        name: slot.name,
+        on: slot.on !== false,
+        sm: num(slot.strength, 1),
+        sc: num(slot.strength, 1),
+      }));
+      break;
+    }
+
     case "promptState": {
       const text = params.prompt || "";
       if (text) {
@@ -1019,6 +1051,22 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
         patchPixaromaState("sizesState", sizesStateVal, params);
       }
       assignState(inputs, "sizesState", sizesStateVal, nodeDef);
+    } else if (classType === "PixaromaLoraLoader") {
+      // State lives on the widget as an object and on node.properties as a JSON
+      // string. Step 2b only carries object properties, so this node would
+      // otherwise run with whatever the template was saved with.
+      let loraState = wv[0];
+      if (typeof loraState === "string") {
+        try { loraState = JSON.parse(loraState); } catch (e) { loraState = null; }
+      }
+      if (!loraState || typeof loraState !== "object") {
+        const prop = node.properties && node.properties.loraLoaderState;
+        try { loraState = typeof prop === "string" ? JSON.parse(prop) : (prop || {}); } catch (e) { loraState = {}; }
+      }
+      loraState = JSON.parse(JSON.stringify(loraState));
+      if (!Array.isArray(loraState.loras)) loraState.loras = [];
+      patchPixaromaState("loraLoaderState", loraState, params);
+      assignState(inputs, "loraLoaderState", loraState, nodeDef);
     } else if (classType === "PixaromaSaveMp4") {
       inputs["fps"] = parseInt(params.fps || 24);
       // Auto-save on  -> output/MinimaxH3/, where the Gallery route looks.
@@ -3630,7 +3678,12 @@ app.registerExtension({
           const sel = mk("select", { flex: "1", background: C.bg2, color: C.text, border: `1px solid ${C.border}`, borderRadius: "4px", padding: "4px", fontSize: "11px", outline: "none", cursor: "pointer" });
           const defOpt = mk("option", { value: "", textContent: "Select LoRA safetensors..." });
           sel.appendChild(defOpt);
-          availableLoras.forEach(l => {
+          const options = availableLoras.slice();
+          // A LoRA just downloaded from Setup can be attached before the folder
+          // listing refreshes - without this the row would read "Select LoRA..."
+          // as if nothing were picked.
+          if (slot.name && !options.includes(slot.name)) options.push(slot.name);
+          options.forEach(l => {
             const opt = mk("option", { value: l, textContent: l });
             if (l === slot.name) opt.selected = true;
             sel.appendChild(opt);
@@ -3962,12 +4015,35 @@ app.registerExtension({
         }
       };
 
+      // Downloading the turbo LoRA from Setup is only half the job: unlike the
+      // weights it has no *Loader node of its own, so it also has to land in the
+      // workflow's LoRA loader. Once per session, the first time it reports as
+      // installed, it fills an empty slot (or takes a new one).
+      let turboLoraAttached = false;
+      const syncTurboLoraSlot = async (list) => {
+        if (turboLoraAttached) return;
+        const turbo = (list || []).find(m => m.id === TURBO_LORA_ID);
+        if (!turbo || !turbo.installed) return;
+        turboLoraAttached = true;
+        if (S.loras.some(l => (l.name || "").endsWith(TURBO_LORA_NAME))) return;
+        const empty = S.loras.find(l => !l.name);
+        if (empty) empty.name = TURBO_LORA_NAME;
+        else S.loras.push({ name: TURBO_LORA_NAME, strength: 1.0 });
+        persist();
+        await fetchLoras();
+        renderLoraSlots();
+      };
+
       const fetchAndRenderModels = async () => {
         try {
           const res = await fetch("/minimax_h3/models_status");
           const data = await res.json();
-          if (data && data.models) renderModelCards(data.models);
-          else renderModelCards(FALLBACK_MODELS);
+          if (data && data.models) {
+            renderModelCards(data.models);
+            syncTurboLoraSlot(data.models);
+          } else {
+            renderModelCards(FALLBACK_MODELS);
+          }
         } catch (e) {
           renderModelCards(FALLBACK_MODELS);
         }
