@@ -18,12 +18,24 @@ import subprocess
 import shutil
 import threading
 import urllib.request
+import urllib.parse
 from pathlib import Path
 from typing import Optional, Dict, Tuple, Any, List
 
 import folder_paths
 from aiohttp import web
 from server import PromptServer
+
+# ComfyUI's VIDEO socket carries a VideoInput, not a dict. Older builds have no
+# comfy_api, so this stays optional and the node falls back to the raw path.
+try:
+    from comfy_api.latest import InputImpl as _ComfyInputImpl
+except Exception:
+    try:
+        from comfy_api.input_impl import VideoFromFile as _VideoFromFile
+        _ComfyInputImpl = type("_Shim", (), {"VideoFromFile": staticmethod(_VideoFromFile)})
+    except Exception:
+        _ComfyInputImpl = None
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Constants & Paths Configuration
@@ -32,6 +44,9 @@ from server import PromptServer
 NODE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(NODE_DIR, 'config.json')
 SUBFOLDER = "MinimaxH3"
+VIDEO_EXTENSIONS = (".mp4", ".webm", ".mov")
+# How long a resume waits for a pausing worker to unwind before taking over.
+PAUSE_HANDOVER_TIMEOUT_S = 2.0
 
 # User config directory outside node folder so it survives git pulls/reinstalls
 USER_CONFIG_DIR = os.path.join(folder_paths.get_user_directory(), "default", "MinimaxH3OneVideo")
@@ -271,16 +286,27 @@ def _async_download_worker(model_id: str):
 
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
+            # A resume is only a resume if the server AGREED to it (206 with a
+            # Content-Range). HuggingFace redirects to a CDN, and a CDN or proxy
+            # that ignores Range answers 200 with the whole file - appending that
+            # onto the partial silently produced a corrupt safetensors of
+            # existing+full bytes that only failed later, at load time.
+            resumed = existing_bytes > 0 and getattr(resp, "status", resp.getcode()) == 206
+            if existing_bytes > 0 and not resumed:
+                print("[MinimaxH3Video] Server ignored the resume request; starting over.")
+                existing_bytes = 0
+                last_speed_bytes = 0
+
             content_len = resp.headers.get("Content-Length")
             if content_len:
                 total_bytes = int(content_len) + existing_bytes
             else:
-                total_bytes = existing_bytes + 100000000
+                total_bytes = 0   # unknown - report bytes, not a made-up percentage
 
             state["total_bytes"] = total_bytes
             state["downloaded_bytes"] = existing_bytes
 
-            mode_str = "ab" if existing_bytes > 0 else "wb"
+            mode_str = "ab" if resumed else "wb"
             with open(temp_path, mode_str) as out_f:
                 chunk_size = 1024 * 1024  # 1 MB chunk
                 while True:
@@ -307,6 +333,18 @@ def _async_download_worker(model_id: str):
                         state["speed_mbps"] = round(speed, 2)
                         last_speed_time = now
                         last_speed_bytes = existing_bytes
+
+        # A connection dropped mid-stream surfaces as a clean EOF, so "no more
+        # chunks" is not "complete". Promoting a short file to a final
+        # .safetensors only fails much later, at load time, looking like a bad
+        # model - the same confusing symptom the 206 check above prevents.
+        if total_bytes > 0 and existing_bytes != total_bytes:
+            state["status"] = "error"
+            state["error"] = "download ended early: {} of {} bytes (partial kept, press download again to resume)".format(
+                existing_bytes, total_bytes
+            )
+            print("[MinimaxH3Video] {}: {}".format(info["name"], state["error"]))
+            return
 
         if os.path.exists(temp_path):
             os.replace(temp_path, target_path)
@@ -487,8 +525,25 @@ def _meta_path_legacy(video_path: str) -> str:
 
 
 def _favorites_path() -> str:
-    """Get path to favorites.json file"""
-    return os.path.join(NODE_DIR, "favorites.json")
+    """Favourites live with the user config, not in the node folder.
+
+    Anything under NODE_DIR is lost the moment the node is reinstalled, and a
+    read-only custom_nodes mount cannot be written to at all. A file left at
+    the old location is migrated across once, on first read.
+    """
+    new_path = os.path.join(USER_CONFIG_DIR, "favorites.json")
+    legacy = os.path.join(NODE_DIR, "favorites.json")
+    if not os.path.exists(new_path) and os.path.exists(legacy):
+        try:
+            os.makedirs(USER_CONFIG_DIR, exist_ok=True)
+            shutil.copyfile(legacy, new_path)
+            print("[MinimaxH3Video] Migrated favorites.json to", new_path)
+        except Exception as e:
+            # Reads and writes must agree on one file, so a failed migration
+            # keeps BOTH on the legacy path rather than splitting them.
+            print(f"[MinimaxH3Video] Could not migrate favorites: {e}")
+            return legacy
+    return new_path
 
 
 def _load_favorites() -> set:
@@ -528,7 +583,25 @@ def _favorites_remove(filename: str):
 
 
 def _safe_resolve_path(base_dir: str, subfolder: str = "", filename: str = "") -> str:
-    """Prevent path traversal vulnerabilities by enforcing child paths within base_dir"""
+    """Resolve base_dir/subfolder/filename, refusing anything that escapes.
+
+    Containment against base_dir alone is not enough: every caller passes the
+    node's own subfolder, so a filename of "../something.png" stayed inside the
+    output root and passed, which let /delete remove any file ComfyUI had ever
+    written. A filename here is a bare name and a subfolder is a single
+    directory, so neither may carry a separator or a parent reference.
+    """
+    def _reject(label: str, value: str):
+        if value in (".", "..") or "/" in value or "\\" in value or "\x00" in value:
+            raise ValueError(
+                "Security Warning: {} may not contain a path separator: {!r}".format(label, value)
+            )
+
+    if filename:
+        _reject("filename", filename)
+    if subfolder:
+        _reject("subfolder", subfolder)
+
     base = Path(base_dir).resolve()
     target = base
     if subfolder:
@@ -686,6 +759,24 @@ async def start_download_model(request):
         if model_id not in _download_state:
             _download_state[model_id] = {"status": "idle", "downloaded_bytes": 0, "total_bytes": 0, "percent": 0.0, "speed_mbps": 0.0, "error": None}
 
+        # Two workers on one .tmp file interleave their chunks and corrupt it.
+        # The button is disabled while running, but the route is open and the
+        # panel polls every second, so the guard belongs here.
+        running = _download_threads.get(model_id)
+        if running is not None and running.is_alive():
+            # A paused worker is still alive while it unwinds, and can sit in a
+            # blocking read for up to the socket timeout. Reporting
+            # "already_running" there told the user the download had resumed
+            # when nothing was downloading. Give the cancelled worker a moment
+            # to exit, then take over.
+            cancelled = _download_cancel_events.get(model_id)
+            if cancelled is not None and cancelled.is_set():
+                running.join(timeout=PAUSE_HANDOVER_TIMEOUT_S)
+            if running.is_alive():
+                return web.json_response(
+                    {"success": True, "already_running": True, "status": get_model_status_dict(model_id)}
+                )
+
         cancel_evt = threading.Event()
         _download_cancel_events[model_id] = cancel_evt
 
@@ -782,7 +873,8 @@ async def debug_payload(request):
     """
     try:
         payload = await request.json()
-        out_path = os.path.join(NODE_DIR, "last_payload.json")
+        os.makedirs(USER_CONFIG_DIR, exist_ok=True)
+        out_path = os.path.join(USER_CONFIG_DIR, "last_payload.json")
         with open(out_path, "w") as f:
             json.dump(payload, f, indent=1)
 
@@ -842,7 +934,7 @@ async def get_gallery(request):
                 "type": "output",
                 "mtime": mtime,
                 "favorite": is_fav,
-                "video_url": f"/minimax_h3/video_file?filename={fname}&subfolder={SUBFOLDER}",
+                "video_url": f"/minimax_h3/video_file?filename={urllib.parse.quote(fname)}&subfolder={urllib.parse.quote(SUBFOLDER)}",
                 "metadata": meta
             })
             
@@ -1057,9 +1149,32 @@ async def set_output(request):
         data = await request.json()
         node_id = str(data.get("node_id"))
         video_info = data.get("video_info", {})
-        
+
+        # generate_video reads this straight off disk, so it is validated here
+        # rather than trusted. A non-dict used to raise AttributeError deep in
+        # the node; an arbitrary name could name any file under the roots.
+        if not isinstance(video_info, dict):
+            return web.json_response({"success": False, "error": "video_info must be an object"}, status=400)
+        filename = video_info.get("filename")
+        if not isinstance(filename, str) or not filename:
+            return web.json_response({"success": False, "error": "video_info.filename is required"}, status=400)
+        if os.path.splitext(filename)[1].lower() not in VIDEO_EXTENSIONS:
+            return web.json_response(
+                {"success": False, "error": "unsupported video type: {}".format(filename)}, status=400
+            )
+        subfolder = video_info.get("subfolder", SUBFOLDER)
+        out_type = video_info.get("type", "output")
+        if out_type not in ("output", "temp"):
+            return web.json_response({"success": False, "error": "type must be output or temp"}, status=400)
+        if not isinstance(subfolder, str):
+            return web.json_response({"success": False, "error": "subfolder must be a string"}, status=400)
+
         global _last_output_by_node
-        _last_output_by_node[node_id] = video_info
+        _last_output_by_node[node_id] = {
+            "filename": filename,
+            "subfolder": subfolder,
+            "type": out_type,
+        }
         return web.json_response({"success": True})
     except Exception as e:
         return web.json_response({"success": False, "error": str(e)}, status=400)
@@ -1131,36 +1246,52 @@ class MinimaxH3OneVideoNode:
 
         fps_int = int(fps) if fps else 24
 
-        timestamp = time.time()
-        time_str = time.strftime("%Y%m%d_%H%M%S", time.localtime(timestamp))
-        filename = f"MinimaxH3_{mode}_{time_str}.mp4"
-        out_dir = _get_minimax_output_dir()
+        # The clip is produced by the node's own Generate button, which submits
+        # its graph to /prompt and then reports the finished file back through
+        # /minimax_h3/set_output. The VIDEO socket hands on THAT file.
+        #
+        # This used to invent a filename from the clock and return it inside a
+        # plain dict: a path to a file that was never written, in a shape no
+        # VIDEO consumer accepts. Anything wired to this output (Save Video,
+        # Preview Video, VHS) died on it.
+        recorded = _last_output_by_node.get(str(unique_id)) if unique_id else None
+        filename = (recorded or {}).get("filename")
+        if not filename:
+            raise ValueError(
+                "[MinimaxH3Video] No clip to hand on yet. This node renders from its own "
+                "Generate button, not from the queue - press Generate in the node, then "
+                "run the graph to pass that clip downstream."
+            )
 
-        output_metadata = {
+        subfolder = (recorded or {}).get("subfolder", SUBFOLDER)
+        base_dir = (folder_paths.get_temp_directory()
+                    if (recorded or {}).get("type") == "temp"
+                    else _get_output_dir())
+        video_path = _safe_resolve_path(base_dir, subfolder, filename)
+        if not os.path.exists(video_path):
+            raise ValueError(
+                "[MinimaxH3Video] The last clip is no longer on disk: {}. With Auto-save off "
+                "renders go to the temp folder and are cleared on restart.".format(video_path)
+            )
+
+        output_metadata = dict(_read_json_meta(video_path) or {})
+        output_metadata.update({
             "mode": SUPPORTED_MODES.get(mode, mode),
             "raw_mode": mode,
             "duration": duration,
             "fps": fps_int,
-            "motion_strength": motion_strength,
             "guidance_scale": guidance_scale,
             "prompt": prompt,
             "negative_prompt": negative_prompt,
-            "timestamp": timestamp,
-            "favorite": False,
+            "timestamp": time.time(),
             "filename": filename,
-            "subfolder": SUBFOLDER,
-            "video_url": f"/minimax_h3/video_file?filename={filename}&subfolder={SUBFOLDER}"
-        }
+            "subfolder": subfolder,
+            "video_url": "/minimax_h3/video_file?filename={}&subfolder={}".format(
+                urllib.parse.quote(filename), urllib.parse.quote(subfolder)),
+        })
 
-        if unique_id:
-            _last_output_by_node[str(unique_id)] = output_metadata
-
-        video_output = {
-            "filename": filename,
-            "subfolder": SUBFOLDER,
-            "type": "output",
-            "metadata": output_metadata
-        }
+        video_output = (_ComfyInputImpl.VideoFromFile(video_path)
+                        if _ComfyInputImpl is not None else video_path)
 
         meta_json_str = json.dumps(output_metadata, ensure_ascii=False, indent=2)
 
