@@ -58,6 +58,77 @@ const R2V_PROMPT_PRESETS = {
 const LS_KEY = "xflow_one_minimax_h3_state";
 const DEFAULT_NEG_PROMPT = "low quality, deformed, blurry, watermark, ugly, bad anatomy, disfigured, mutated, extra limbs, poorly drawn face, bad proportions";
 
+// MiniMaxH3ReferenceToVideo's ref_images autogrow runs ref_image_0..8, so nine
+// references is the model's ceiling.
+const MAX_REF_SLOTS = 9;
+
+// Named so each value and the comment that explains it cannot drift apart.
+const OBJECT_INFO_TIMEOUT_MS = 60000;   // /object_info is megabytes and has no timeout of its own
+const POLL_INTERVAL_MS = 2000;          // gap between /history checks while a run is in flight
+const MAX_UNKNOWN_POLLS = 5;            // polls with the server knowing nothing before calling a run gone
+const MAX_UNREACHABLE_POLLS = 60;       // consecutive failed status calls (~2 min) before giving up on the server
+
+// What a saved workflow carries, and the shape each value must have coming
+// back. A workflow file is someone else's data: it is read with these rules,
+// never merged wholesale, so a hand-edited or hostile file cannot put a
+// surprise type into a value that ends up in the submitted prompt.
+const PERSISTED_KEYS = [
+  "mode", "orientation", "width", "height", "longest_side", "step_round",
+  "aspect_ratio", "crop_from", "upscale_small", "resample_mode",
+  "active_size_tabs", "active_shape_chips", "duration", "fps", "cfg", "seed",
+  "prompt", "negativePrompt", "autoSave", "loras", "r2v_type",
+];
+
+const STATE_RULES = {
+  mode: v => (["T2V", "I2V", "R2V"].includes(v) ? v : undefined),
+  orientation: v => (["Portrait", "Landscape"].includes(v) ? v : undefined),
+  r2v_type: v => (["SPEAK", "SING"].includes(v) ? v : undefined),
+  width: v => clampInt(v, 32, 8192),
+  height: v => clampInt(v, 32, 8192),
+  longest_side: v => clampInt(v, 32, 8192),
+  step_round: v => clampInt(v, 0, 64),
+  duration: v => clampInt(v, 1, 10),
+  fps: v => clampInt(v, 1, 120),
+  seed: v => clampInt(v, 0, Number.MAX_SAFE_INTEGER),
+  cfg: v => (typeof v === "number" && isFinite(v) ? Math.min(20, Math.max(0, v)) : undefined),
+  autoSave: v => (typeof v === "boolean" ? v : undefined),
+  upscale_small: v => (typeof v === "boolean" ? v : undefined),
+  aspect_ratio: v => (typeof v === "string" ? v : undefined),
+  crop_from: v => (typeof v === "string" ? v : undefined),
+  resample_mode: v => (typeof v === "string" ? v : undefined),
+  prompt: v => (typeof v === "string" ? v.slice(0, 20000) : undefined),
+  negativePrompt: v => (typeof v === "string" ? v.slice(0, 20000) : undefined),
+  active_size_tabs: v => (Array.isArray(v) ? v.map(n => clampInt(n, 32, 8192)).filter(n => n !== undefined) : undefined),
+  active_shape_chips: v => (Array.isArray(v) ? v.filter(x => typeof x === "string").slice(0, 16) : undefined),
+  loras: v => (Array.isArray(v) ? v.slice(0, 16).map(l => ({
+    name: l && typeof l.name === "string" ? l.name : "",
+    strength: clampNum(l && l.strength, 0, 2, 1),
+  })) : undefined),
+};
+
+const clampInt = (v, lo, hi) => {
+  const n = parseInt(v, 10);
+  return isNaN(n) ? undefined : Math.min(hi, Math.max(lo, n));
+};
+const clampNum = (v, lo, hi, dflt) => {
+  const n = parseFloat(v);
+  return isNaN(n) ? dflt : Math.min(hi, Math.max(lo, n));
+};
+
+// Copy only known keys, each through its own rule. Object.assign would take
+// whatever the file held, including an own "__proto__" key.
+const sanitizeState = (raw) => {
+  const out = {};
+  if (!raw || typeof raw !== "object") return out;
+  PERSISTED_KEYS.forEach(k => {
+    if (!Object.prototype.hasOwnProperty.call(raw, k)) return;
+    const rule = STATE_RULES[k];
+    const val = rule ? rule(raw[k]) : undefined;
+    if (val !== undefined) out[k] = val;
+  });
+  return out;
+};
+
 const MODES = {
   T2V: "Text to Video",
   I2V: "Image to Video",
@@ -185,6 +256,7 @@ const ICONS = {
   expand: ["M15 3h6v6", "M9 21H3v-6", "M21 3l-7 7", "M3 21l7-7"],
   collapse: ["M4 14h6v6", "M20 10h-6V4", "M10 14L3 21", "M14 10l7-7"],
   check: "M20 6L9 17l-5-5",
+  plus: "M12 5v14M5 12h14",
   sparkle: ["M12 3v3m0 12v3M3 12h3m12 0h3M5.637 5.637l2.122 2.122m8.485 8.485l2.122 2.122M5.637 18.363l2.122-2.122m8.485-8.485l2.122-2.122"],
   chevronDown: "M6 9l6 6 6-6",
   mic: ["M12 2a3 3 0 00-3 3v7a3 3 0 006 0V5a3 3 0 00-3-3z", "M19 10v2a7 7 0 01-14 0v-2", "M12 19v3"],
@@ -491,6 +563,9 @@ async function audioBufferToWavBlob(audioBuffer, startTime, endTime) {
   const startSample = Math.floor(startTime * sampleRate);
   const endSample = Math.min(audioBuffer.length, Math.floor(endTime * sampleRate));
   const frameCount = endSample - startSample;
+  if (!(frameCount > 0)) {
+    throw new Error("Nothing selected to crop - drag the brackets apart first.");
+  }
 
   const offlineCtx = new OfflineAudioContext(numChannels, frameCount, sampleRate);
   const source = offlineCtx.createBufferSource();
@@ -522,10 +597,13 @@ async function audioBufferToWavBlob(audioBuffer, startTime, endTime) {
   writeString(36, 'data');
   view.setUint32(40, renderedBuffer.length * numChannels * 2, true);
 
+  const channelData = [];
+  for (let c = 0; c < numChannels; c++) channelData.push(renderedBuffer.getChannelData(c));
+
   let offset = 44;
   for (let i = 0; i < renderedBuffer.length; i++) {
     for (let channel = 0; channel < numChannels; channel++) {
-      let sample = renderedBuffer.getChannelData(channel)[i];
+      let sample = channelData[channel][i];
       sample = Math.max(-1, Math.min(1, sample));
       view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
       offset += 2;
@@ -728,7 +806,7 @@ function playDone() {
 let CONFIG = null;
 async function loadConfig() {
   try {
-    const res = await fetch("/minimax_h3/config");
+    const res = await api.fetchApi("/minimax_h3/config");
     CONFIG = await res.json();
   } catch (e) {
     CONFIG = {};
@@ -738,7 +816,7 @@ async function loadConfig() {
 async function checkSystemValidation(mode) {
   try {
     const modeKey = mode === "I2V" ? "image_to_video" : (mode === "R2V" ? "reference_to_video" : "text_to_video");
-    const res = await fetch(`/minimax_h3/validate_system?mode=${modeKey}`);
+    const res = await api.fetchApi(`/minimax_h3/validate_system?mode=${modeKey}`);
     if (!res.ok) throw new Error("API HTTP error");
     return await res.json();
   } catch (e) {
@@ -788,13 +866,20 @@ async function resolveModelName(classType, inputName, rawPreferred) {
 let _allObjectInfo = null;
 async function fetchAllObjectInfo() {
   if (!_allObjectInfo) {
+    // /object_info is megabytes and has no timeout of its own. Behind a slow
+    // tunnel a stalled read here hung the whole run with the status line still
+    // reading "Queuing workflow...". Fail after the timeout instead of never.
+    const ctl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = ctl ? setTimeout(() => ctl.abort(), OBJECT_INFO_TIMEOUT_MS) : null;
     try {
-      const res = await api.fetchApi("/object_info");
+      const res = await api.fetchApi("/object_info", ctl ? { signal: ctl.signal } : undefined);
       if (res && res.ok) {
         _allObjectInfo = await res.json();
       }
     } catch (e) {
       console.warn("[MinimaxH3] Could not fetch /object_info:", e);
+    } finally {
+      if (timer) clearTimeout(timer);
     }
   }
   return _allObjectInfo || {};
@@ -927,6 +1012,15 @@ const WORKFLOW_MODES = {
 };
 
 async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInner) {
+  // `mode` can be downgraded below (fflf -> first-frame) when an input file has gone.
+  // Name the step in the status line. Everything here happens before the run is
+  // queued, and a stall in any of it used to read as "Queuing workflow..."
+  // forever - no way to tell a slow /object_info from a dead server.
+  const stage = (text, pct) => {
+    if (statusLabel) tx(statusLabel, text);
+    if (progressBarInner && pct) progressBarInner.style.width = `${pct}%`;
+  };
+
   const modeKey = WORKFLOW_MODES[mode];
   if (!modeKey) {
     // Never silently fall back - that is exactly how this went unnoticed.
@@ -934,9 +1028,13 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
   }
   let endpoint = `/minimax_h3/workflow_${modeKey}`;
 
-  const res = await fetch(endpoint);
-  if (!res.ok) throw new Error(`Could not load workflow JSON for mode: ${mode}`);
-  const workflowJson = await res.json();
+  stage("Loading workflow template...", 4);
+  const loadTemplate = async (route, forMode) => {
+    const r = await api.fetchApi(route);
+    if (!r.ok) throw new Error(`Could not load workflow JSON for mode: ${forMode}`);
+    return r.json();
+  };
+  let workflowJson = await loadTemplate(endpoint, mode);
   if (!workflowJson || !workflowJson.nodes) throw new Error(`Failed to load workflow template for mode: ${mode}`);
 
   // Uploaded filenames are remembered across sessions, but the files live in
@@ -954,18 +1052,59 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
     }
   };
 
+  // Reference slots 1..9, mapping onto the model's ref_image_0..8. Slots 1 and
+  // 2 also arrive as image_name_1 / image_name_2, which is what I2V's start and
+  // end frames use.
+  const refImageNames = (params.image_names && params.image_names.length)
+    ? params.image_names.slice(0, MAX_REF_SLOTS)
+    : [params.image_name_1 || null, params.image_name_2 || null];
+
   const missingInputs = [];
+  if (params.audio_name || params.video_name || refImageNames.slice(1).some(Boolean)) {
+    stage("Checking input files...", 7);
+  }
   for (const key of ["audio_name", "video_name", "image_name_2"]) {
     if (params[key] && !(await inputFileExists(params[key]))) {
       missingInputs.push(params[key]);
       params = Object.assign({}, params, { [key]: null });
     }
   }
+  refImageNames[1] = params.image_name_2 || null;   // may have just been dropped above
+  for (let i = 2; i < refImageNames.length; i++) {
+    if (refImageNames[i] && !(await inputFileExists(refImageNames[i]))) {
+      missingInputs.push(refImageNames[i]);
+      refImageNames[i] = null;
+    }
+  }
+
+  // The optional references fill ref_image_1, ref_image_2 ... with no holes,
+  // whatever their slot numbers on the node face. Leaving a hole would renumber
+  // what the model calls <Picture 2>, <Picture 3> ... against what the UI shows,
+  // so a prompt written from the labels would point at the wrong picture - and
+  // reference 1 keeps its own slot either way, since it alone drives the output
+  // resolution through Longest Side. In I2V the only optional image is the end
+  // frame, so packing leaves that path exactly as it was.
+  const refExtras = refImageNames.slice(1).filter(Boolean);
   if (missingInputs.length) {
     console.warn("[MinimaxH3] Not in ComfyUI's input folder, continuing without:", missingInputs);
   }
 
+  if (mode === "image_to_video_fflf" && !refImageNames[1]) {
+    console.warn("[MinimaxH3] End frame unavailable - running the first-frame workflow instead.");
+    mode = "image_to_video";
+    workflowJson = await loadTemplate(`/minimax_h3/workflow_${WORKFLOW_MODES[mode]}`, mode);
+  }
+
+  stage("Reading node definitions...", 10);
   const allObjInfo = await fetchAllObjectInfo();
+  if (!Object.keys(allObjInfo).length) {
+    // Every widget value is filled in from these definitions. Continuing with
+    // an empty map submits a graph with half its inputs missing, which fails
+    // later and much less clearly than saying so here.
+    throw new Error("Could not read node definitions from ComfyUI (/object_info). Is the server reachable?");
+  }
+
+  stage("Building prompt...", 12);
   const promptPayload = {};
 
   // Which loader feeds which reference slot, read from the graph rather than
@@ -1097,12 +1236,10 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
       // Graph wiring wins; titles are only the fallback for I2V's end frame,
       // which has no ref_image slot to read.
       const graphSlot = refSlotByNodeId[nodeId];
-      const isSecondSlot = graphSlot
-        ? graphSlot === 2
-        : (title.includes("last frame") || title.includes("2.") || title.includes("image 2"));
-      const chosenImg = isSecondSlot
-        ? (params.image_name_2 || params.image_name_1 || wv[0] || "")
-        : (params.image_name_1 || wv[0] || "");
+      const slot = graphSlot
+        || ((title.includes("last frame") || title.includes("2.") || title.includes("image 2")) ? 2 : 1);
+      const chosenImg = (slot === 2 ? (refExtras[0] || refImageNames[0]) : refImageNames[slot - 1])
+        || wv[0] || "";
 
       inputs["image"] = chosenImg;
       inputs["image_path"] = chosenImg;
@@ -1190,7 +1327,29 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
       }
     };
 
-    if (model && !params.image_name_2) {
+    // Slots 3..9 have no loader in the template, so clone the slot-2 loader
+    // once per extra reference. Slot 2 is the right one to copy: it feeds the
+    // model directly, where slot 1 goes through Longest Side and sets the
+    // output resolution - which must stay driven by reference 1 alone.
+    // Cloning runs before the pruning below, which can delete that loader.
+    const refLoaderId = Object.keys(refSlotByNodeId).find(id => refSlotByNodeId[id] === 2);
+    if (model && refLoaderId && promptPayload[refLoaderId]) {
+      let nextId = Math.max(0, ...Object.keys(promptPayload).map(id => parseInt(id, 10) || 0)) + 1;
+      for (let i = 1; i < refExtras.length; i++) {
+        const name = refExtras[i];
+        const cloneId = String(nextId++);
+        const clone = JSON.parse(JSON.stringify(promptPayload[refLoaderId]));
+        const named = ["image", "image_path", "file", "upload"].filter(k => k in clone.inputs);
+        if (!named.length) {
+          throw new Error("Reference image loader exposes no filename input - cannot add reference " + (i + 1));
+        }
+        named.forEach(k => { clone.inputs[k] = name; });
+        promptPayload[cloneId] = clone;
+        model.inputs[`ref_images.ref_image_${i + 1}`] = [cloneId, 0];
+      }
+    }
+
+    if (model && refExtras.length === 0) {
       const refLink = model.inputs["ref_images.ref_image_1"];
       if (Array.isArray(refLink)) {
         delete model.inputs["ref_images.ref_image_1"];
@@ -1256,13 +1415,14 @@ async function executePixaromaWorkflow(mode, params, statusLabel, progressBarInn
   // Mirror it to the server too - reading a file over ssh is a lot easier than
   // asking someone to find the right DevTools tab.
   try {
-    await fetch("/minimax_h3/debug_payload", {
+    await api.fetchApi("/minimax_h3/debug_payload", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ prompt: promptPayload, mode: mode, params: params }),
     });
   } catch (e) { /* diagnostics only */ }
 
+  stage("Submitting to ComfyUI...", 15);
   const response = await api.fetchApi("/prompt", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1308,6 +1468,17 @@ app.registerExtension({
       }
 
       const self = this;
+
+      // Anything parked outside the node's own DOM is tracked so onRemoved can
+      // take it back. A deleted node used to leave eleven file inputs and the
+      // audio-editor overlay on <body>, plus its websocket handlers still live
+      // on the api object - firing for other people's runs, driving a node that
+      // no longer exists, and multiplying with every node added.
+      const ownedNodes = [];
+      const apiListeners = [];
+      const adopt = (el) => { document.body.appendChild(el); ownedNodes.push(el); return el; };
+      const onApi = (evt, fn) => { api.addEventListener(evt, fn); apiListeners.push([evt, fn]); return fn; };
+
       this.color = C.bg0;
       this.bgcolor = C.bg0;
       this.resizable = false;
@@ -1364,15 +1535,29 @@ app.registerExtension({
         }
       } catch (e) {}
 
+      // Settings belong to the node, not just to this browser. They are kept
+      // in the node's properties, so a saved workflow carries them and two
+      // nodes on one canvas stop overwriting each other through the single
+      // localStorage key. localStorage stays as the starting point for a node
+      // that has none of its own yet.
       const persist = () => {
         try {
           localStorage.setItem(LS_KEY, JSON.stringify(S));
+        } catch (e) {}
+        try {
+          // Only these keys travel in the workflow file. Everything else is
+          // local to this machine - upload records carry a dead blob: URL and
+          // the names of files on this computer, which have no business in a
+          // workflow someone shares.
+          const keep = {};
+          PERSISTED_KEYS.forEach(k => { if (S[k] !== undefined) keep[k] = S[k]; });
+          self.properties = self.properties || {};
+          self.properties.mmh3_state = keep;
         } catch (e) {}
       };
 
       // Root Element (Matching Image 2 1:1 with visible header top bar)
       const root = mk("div", {
-        className: "fk-root",
         // Fill the slot ComfyUI hands the DOM widget rather than assuming it is
         // the full node width: the slot is inset by a margin each side, so a
         // hard NODE_W here hung the panel past the node's right edge. Height
@@ -1399,7 +1584,7 @@ app.registerExtension({
         gap: "12px",
         height: "100%",
         boxSizing: "border-box",
-      });
+      }, { className: "fk-root" });
 
       // ── TOP NAVIGATION BAR (Matching Image 2 1:1 with Vector SVG Icons) ─────
       const topBar = mk("div", {
@@ -1432,7 +1617,6 @@ app.registerExtension({
 
       const createPill = (id, iconName, label) => {
         const btn = mk("button", {
-          className: "fk-pill-btn",
           padding: "5px 16px",
           fontSize: "11px",
           fontWeight: "700",
@@ -1445,7 +1629,7 @@ app.registerExtension({
           display: "flex",
           alignItems: "center",
           gap: "6px",
-        });
+        }, { className: "fk-pill-btn" });
 
         const iconEl = svgIcon(iconName, 13, C.text);
         btn.appendChild(iconEl);
@@ -2289,11 +2473,6 @@ app.registerExtension({
       const cfgBox = mk("div", { background: C.bg2, padding: "8px 10px", borderRadius: "6px", border: `1px solid ${C.border}` });
       cfgBox.appendChild(cap("CFG SCALE"));
       const cfgInput = mk("input", {
-        type: "number",
-        min: "1.0",
-        max: "20.0",
-        step: "0.5",
-        value: S.cfg != null ? S.cfg : 1.0,
         width: "100%",
         background: C.bg1,
         color: C.text,
@@ -2305,6 +2484,9 @@ app.registerExtension({
         fontFamily: "inherit",
         outline: "none",
         boxSizing: "border-box",
+      }, {
+        type: "number", min: "1.0", max: "20.0", step: "0.5",
+        value: S.cfg != null ? S.cfg : 1.0,
       });
       cfgInput.oninput = () => { S.cfg = parseFloat(cfgInput.value) || 1.0; persist(); };
       cfgBox.appendChild(cfgInput);
@@ -2622,8 +2804,6 @@ app.registerExtension({
       }, { textContent: "—" });
 
       const seedInputEl = mk("input", {
-        type: "number",
-        value: S.seed || 0,
         flex: "1",
         width: "60px",
         background: "transparent",
@@ -2634,7 +2814,7 @@ app.registerExtension({
         outline: "none",
         textAlign: "center",
         boxSizing: "border-box",
-      });
+      }, { type: "number", value: S.seed || 0 });
 
       const randomizerBtn = mk("button", {
         padding: "4px 10px",
@@ -2718,6 +2898,9 @@ app.registerExtension({
 
       let imgData1 = null;
       let imgData2 = null;
+      // Slots 1 and 2 keep their own variables: slot 1 drives the output
+      // resolution through Longest Side, and slot 2 doubles as I2V's end frame.
+      let extraImgs = new Array(MAX_REF_SLOTS - 2).fill(null);   // slots 3..9
       let audioData = null;
       let videoData = null;
 
@@ -2814,7 +2997,7 @@ app.registerExtension({
         fileInput.type = "file";
         fileInput.accept = "image/png, image/jpeg, image/jpg, image/webp";
         fileInput.style.display = "none";
-        document.body.appendChild(fileInput);
+        adopt(fileInput);
 
         const emptyArea = mk("div", {
           flex: "1",
@@ -2881,9 +3064,9 @@ app.registerExtension({
           if (!file) return;
           const formData = new FormData();
           formData.append("image", file);
-          formData.append("overwrite", "true");
+          formData.append("overwrite", "false");   // let the server dedupe; we use the name it returns
           try {
-            const res = await fetch("/upload/image", { method: "POST", body: formData });
+            const res = await api.fetchApi("/upload/image", { method: "POST", body: formData });
             const data = await res.json();
             const serverFileName = data.name || file.name;
             const objectUrl = URL.createObjectURL(file);
@@ -2893,7 +3076,8 @@ app.registerExtension({
               const h = tempImg.naturalHeight;
               const imgObj = { name: serverFileName, url: objectUrl, width: w, height: h };
               if (slotKey === 1) { imgData1 = imgObj; S.imgData1 = imgObj; }
-              else { imgData2 = imgObj; S.imgData2 = imgObj; }
+              else if (slotKey === 2) { imgData2 = imgObj; S.imgData2 = imgObj; }
+              else { extraImgs[slotKey - 3] = imgObj; syncExtraSlots(); }
               // A second reference switches the R2V preset to the two-picture
               // wording (and back out when it is cleared).
               if (slotKey === 2 && S.mode === "R2V") applyR2vPreset(S.r2v_type);
@@ -2912,7 +3096,8 @@ app.registerExtension({
           e.stopPropagation();
           fileInput.value = "";
           if (slotKey === 1) { imgData1 = null; S.imgData1 = null; }
-          else { imgData2 = null; S.imgData2 = null; }
+          else if (slotKey === 2) { imgData2 = null; S.imgData2 = null; }
+          else { extraImgs[slotKey - 3] = null; syncExtraSlots(); }
           if (slotKey === 2 && S.mode === "R2V") applyR2vPreset(S.r2v_type);
           previewArea.style.display = "none";
           emptyArea.style.display = "flex";
@@ -2945,7 +3130,7 @@ app.registerExtension({
         audioInput.type = "file";
         audioInput.accept = "audio/mp3, audio/wav, audio/mpeg, audio/flac, audio/m4a, audio/x-wav";
         audioInput.style.display = "none";
-        document.body.appendChild(audioInput);
+        adopt(audioInput);
 
         const emptyArea = mk("div", {
           flex: "1",
@@ -3008,7 +3193,10 @@ app.registerExtension({
           boxSizing: "border-box",
           paddingRight: "36px",
         });
-        const audioPlayer = mk("audio", { controls: true, style: "width: 100%; max-width: 100%; min-width: 0; height: 26px; outline: none; box-sizing: border-box;" });
+        const audioPlayer = mk("audio", {
+          width: "100%", maxWidth: "100%", minWidth: "0",
+          height: "26px", outline: "none", boxSizing: "border-box",
+        }, { controls: true });
 
         let currentUploadedAudioFile = null;
 
@@ -3035,9 +3223,9 @@ app.registerExtension({
           currentUploadedAudioFile = file;
           const formData = new FormData();
           formData.append("image", file);
-          formData.append("overwrite", "true");
+          formData.append("overwrite", "false");   // let the server dedupe; we use the name it returns
           try {
-            const res = await fetch("/upload/image", { method: "POST", body: formData });
+            const res = await api.fetchApi("/upload/image", { method: "POST", body: formData });
             const data = await res.json();
             const serverFileName = data.name || file.name;
             const objectUrl = URL.createObjectURL(file);
@@ -3101,7 +3289,7 @@ app.registerExtension({
         fileInput.type = "file";
         fileInput.accept = "video/mp4, video/quicktime, video/webm, video/x-matroska";
         fileInput.style.display = "none";
-        document.body.appendChild(fileInput);
+        adopt(fileInput);
 
         const emptyArea = mk("div", {
           flex: "1", border: `1px dashed ${C.border}`, borderRadius: "6px",
@@ -3135,9 +3323,9 @@ app.registerExtension({
           if (!file) return;
           const formData = new FormData();
           formData.append("image", file);      // ComfyUI's upload route takes video too
-          formData.append("overwrite", "true");
+          formData.append("overwrite", "false");   // let the server dedupe; we use the name it returns
           try {
-            const res = await fetch("/upload/image", { method: "POST", body: formData });
+            const res = await api.fetchApi("/upload/image", { method: "POST", body: formData });
             const data = await res.json();
             const serverFileName = data.name || file.name;
             const objectUrl = URL.createObjectURL(file);
@@ -3183,8 +3371,77 @@ app.registerExtension({
       const box2Audio = createAudioUploadBox();
       const box2Video = createVideoUploadBox();
 
-      slotGrid.append(box1, box2Img, box2Audio, box2Video);
+      // Every reference image in one grid - 1, 2, then 3..9 as they are added -
+      // with audio and video in their own grid underneath, so the image slots
+      // read as one group instead of being split around the media boxes.
+      slotGrid.append(box1, box2Img);
+
+      const extraBoxes = [];
+      for (let slot = 3; slot <= MAX_REF_SLOTS; slot++) {
+        const extraBox = createImgUploadBox(cap(`REF IMAGE ${slot} (OPT)`), slot);
+        extraBox.style.display = "none";
+        extraBoxes.push(extraBox);
+        slotGrid.appendChild(extraBox);
+      }
+
+      // Last in the grid, so it always sits right after the final visible slot.
+      const addRefTile = mk("div", {
+        display: "none",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "4px",
+        background: C.bg1,
+        border: `1px dashed ${C.border}`,
+        borderRadius: "6px",
+        padding: "8px",
+        cursor: "pointer",
+        boxSizing: "border-box",
+        transition: "all 0.15s ease",
+      });
+      addRefTile.append(
+        svgIcon("plus", 18, LIME),
+        mk("span", { fontSize: "11px", fontWeight: "800", color: LIME }, { textContent: "Add Reference" }),
+        mk("span", { fontSize: "9px", fontWeight: "600", color: C.muted }, { textContent: `up to ${MAX_REF_SLOTS}` })
+      );
+      addRefTile.onmouseover = () => { addRefTile.style.borderColor = LIME; addRefTile.style.background = "#222b24"; };
+      addRefTile.onmouseout = () => { addRefTile.style.borderColor = C.border; addRefTile.style.background = C.bg1; };
+      slotGrid.appendChild(addRefTile);
+
       slotCard.appendChild(slotGrid);
+
+      const mediaGrid = mk("div", {
+        display: "grid",
+        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+        gap: "8px",
+        width: "100%",
+        minWidth: "0",
+        marginTop: "8px",
+        boxSizing: "border-box",
+      });
+      mediaGrid.append(box2Audio, box2Video);
+      slotCard.appendChild(mediaGrid);
+
+      // How many of slots 3..9 are on show. The plus adds one; a slot holding an
+      // image is never taken back off, whatever this says.
+      let extraShown = 0;
+
+      const syncExtraSlots = () => {
+        const r2v = S.mode === "R2V";
+        let filled = 0;
+        extraImgs.forEach((img, i) => { if (img) filled = i + 1; });
+        if (extraShown < filled) extraShown = filled;
+        extraBoxes.forEach((box, i) => {
+          box.style.display = r2v && i < extraShown ? "flex" : "none";
+        });
+        addRefTile.style.display = r2v && extraShown < extraBoxes.length ? "flex" : "none";
+      };
+
+      addRefTile.onclick = (e) => {
+        e.stopPropagation();
+        if (extraShown < extraBoxes.length) extraShown++;
+        syncExtraSlots();
+      };
 
       // ── ADVANCED OPTIONS EXPANDABLE ACCORDION CARD ──────────────────────
       const advAccordion = mk("div", {
@@ -3673,7 +3930,7 @@ app.registerExtension({
       let availableLoras = [];
       const fetchLoras = async () => {
         try {
-          const res = await fetch("/minimax_h3/loras");
+          const res = await api.fetchApi("/minimax_h3/loras");
           const data = await res.json();
           if (data && data.loras) availableLoras = data.loras;
         } catch (e) {}
@@ -3694,7 +3951,7 @@ app.registerExtension({
           // the row and pushes the strength box and the remove button out of
           // sight.
           const sel = mk("select", { flex: "1", minWidth: "0", background: C.bg2, color: C.text, border: `1px solid ${C.border}`, borderRadius: "4px", padding: "4px", fontSize: "11px", outline: "none", cursor: "pointer" });
-          const defOpt = mk("option", { value: "", textContent: "Select LoRA safetensors..." });
+          const defOpt = mk("option", {}, { value: "", textContent: "Select LoRA safetensors..." });
           sel.appendChild(defOpt);
           const options = availableLoras.slice();
           // A LoRA just downloaded from Setup can be attached before the folder
@@ -3702,7 +3959,7 @@ app.registerExtension({
           // as if nothing were picked.
           if (slot.name && !options.includes(slot.name)) options.push(slot.name);
           options.forEach(l => {
-            const opt = mk("option", { value: l, textContent: l });
+            const opt = mk("option", {}, { value: l, textContent: l });
             if (l === slot.name) opt.selected = true;
             sel.appendChild(opt);
           });
@@ -3711,8 +3968,15 @@ app.registerExtension({
 
           const strWrap = mk("div", { display: "flex", alignItems: "center", gap: "4px" });
           strWrap.appendChild(mk("span", { fontSize: "10px", color: C.muted }, { textContent: "Str:" }));
-          const strInp = mk("input", { type: "number", min: "0.0", max: "2.0", step: "0.1", value: slot.strength || 1.0, width: "50px", background: C.bg2, color: C.text, border: `1px solid ${C.border}`, borderRadius: "4px", padding: "2px 4px", fontSize: "10px", outline: "none" });
-          strInp.oninput = () => { S.loras[idx].strength = parseFloat(strInp.value); persist(); };
+          const strInp = mk("input", { width: "50px", background: C.bg2, color: C.text, border: `1px solid ${C.border}`, borderRadius: "4px", padding: "2px 4px", fontSize: "10px", outline: "none" });
+          Object.assign(strInp, { type: "number", min: "0.0", max: "2.0", step: "0.1", value: slot.strength ?? 1.0 });
+          // min/max on a number input do not constrain typed text, and an empty
+          // field parses to NaN. Clamp here so the submitted strength is sane.
+          strInp.oninput = () => {
+            const v = parseFloat(strInp.value);
+            S.loras[idx].strength = isNaN(v) ? 1.0 : Math.min(2, Math.max(0, v));
+            persist();
+          };
           strWrap.appendChild(strInp);
           slotRow.appendChild(strWrap);
 
@@ -3937,7 +4201,7 @@ app.registerExtension({
 
             dl.onclick = async () => {
               try {
-                await fetch("/minimax_h3/download_model", {
+                await api.fetchApi("/minimax_h3/download_model", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ model_id: m.id })
@@ -3958,7 +4222,7 @@ app.registerExtension({
             pauseBtn.appendChild(svgIcon("pause", 13, "#000"));
             pauseBtn.appendChild(document.createTextNode("Pause"));
             pauseBtn.onclick = async () => {
-              await fetch("/minimax_h3/pause_download", {
+              await api.fetchApi("/minimax_h3/pause_download", {
                 method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ model_id: m.id })
               });
@@ -3977,7 +4241,7 @@ app.registerExtension({
             resumeBtn.appendChild(document.createTextNode("Resume"));
             resumeBtn.onclick = async () => {
               try {
-                await fetch("/minimax_h3/download_model", {
+                await api.fetchApi("/minimax_h3/download_model", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ model_id: m.id })
@@ -3999,7 +4263,7 @@ app.registerExtension({
             del.appendChild(document.createTextNode("Delete"));
             del.onclick = async () => {
               if (confirm(`Delete ${m.name}?`)) {
-                await fetch("/minimax_h3/delete_model", {
+                await api.fetchApi("/minimax_h3/delete_model", {
                   method: "POST", headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ model_id: m.id })
                 });
@@ -4057,7 +4321,7 @@ app.registerExtension({
 
       const fetchAndRenderModels = async () => {
         try {
-          const res = await fetch("/minimax_h3/models_status");
+          const res = await api.fetchApi("/minimax_h3/models_status");
           const data = await res.json();
           if (data && data.models) {
             renderModelCards(data.models);
@@ -4272,7 +4536,7 @@ app.registerExtension({
       openFolderBtn.appendChild(document.createTextNode("Open Output Folder"));
       openFolderBtn.onclick = async () => {
         try {
-          await fetch("/minimax_h3/open_folder", { method: "POST" });
+          await api.fetchApi("/minimax_h3/open_folder", { method: "POST" });
         } catch (e) {}
       };
 
@@ -4390,7 +4654,7 @@ app.registerExtension({
           delBtn.onclick = async (e) => {
             e.stopPropagation();
             if (confirm(`Delete ${vid.filename}?`)) {
-              await fetch("/minimax_h3/delete", {
+              await api.fetchApi("/minimax_h3/delete", {
                 method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ filename: vid.filename })
               });
@@ -4425,7 +4689,7 @@ app.registerExtension({
 
       const fetchAndRenderGallery = async () => {
         try {
-          const res = await fetch("/minimax_h3/gallery");
+          const res = await api.fetchApi("/minimax_h3/gallery");
           const data = await res.json();
           if (data && data.videos) renderGalleryItems(data.videos);
           else renderGalleryItems([]);
@@ -4842,7 +5106,8 @@ app.registerExtension({
         justifyContent: "center",
       });
 
-      const aeCanvas = mk("canvas", { width: "624", height: "130", style: "width: 100%; height: 100%; display: block;" });
+      const aeCanvas = mk("canvas", { width: "100%", height: "100%", display: "block" },
+                           { width: 624, height: 130 });
       aeCanvasBox.appendChild(aeCanvas);
 
       const aeControlsGrid = mk("div", {
@@ -4860,7 +5125,8 @@ app.registerExtension({
       const startHdr = mk("div", { display: "flex", justifyContent: "space-between", fontSize: "11px", fontWeight: "800", color: C.text });
       const startValLbl = mk("span", { color: LIME }, { textContent: "0.0s" });
       startHdr.append(document.createTextNode("CROP START POSITION"), startValLbl);
-      const startSlider = mk("input", { type: "range", min: "0", max: "100", step: "0.1", value: "0", style: "width: 100%; cursor: pointer;" });
+      const startSlider = mk("input", { width: "100%", cursor: "pointer" },
+                              { type: "range", min: "0", max: "100", step: "0.1", value: "0" });
       startBox.append(startHdr, startSlider);
 
       // 2. Crop Length / Duration Selector
@@ -4890,9 +5156,10 @@ app.registerExtension({
       const pillFull = createLenPill("Full Audio", null);
 
       const lenNumInput = mk("input", {
-        type: "number", min: "0.5", max: "600", step: "0.1", value: "4.0",
-        style: "width: 65px; padding: 3px 6px; font-size: 11px; font-weight: 800; background: #111; color: #00ff66; border: 1px solid #2a2a2a; border-radius: 4px; text-align: center; outline: none;"
-      });
+        width: "65px", padding: "3px 6px", fontSize: "11px", fontWeight: "800",
+        background: "#111", color: LIME, border: `1px solid ${C.border}`,
+        borderRadius: "4px", textAlign: "center", outline: "none",
+      }, { type: "number", min: "0.5", max: "600", step: "0.1", value: "4.0" });
 
       lenPillsRow.append(matchVideoBtn, pill5s, pill10s, pillFull, mk("span", { fontSize: "10px", color: C.muted }, { textContent: "Custom (sec):" }), lenNumInput);
       lenBox.append(lenHdr, lenPillsRow);
@@ -4938,7 +5205,7 @@ app.registerExtension({
       aeFooter.append(aeLeftActions, aeApplyBtn);
       audioEditorContainer.append(aeHeader, aeBody, aeFooter);
       audioEditorOverlay.appendChild(audioEditorContainer);
-      document.body.appendChild(audioEditorOverlay);
+      adopt(audioEditorOverlay);
 
       let currentAudioBuffer = null;
       let currentRawAudioFile = null;
@@ -5215,13 +5482,14 @@ app.registerExtension({
 
             try {
               const croppedBlob = await audioBufferToWavBlob(currentAudioBuffer, st, et);
-              const croppedFile = new File([croppedBlob], `cropped_${fileName || "audio.wav"}`, { type: "audio/wav" });
+              const stem = (fileName || "audio").replace(/\.[^.\/]+$/, "");
+              const croppedFile = new File([croppedBlob], `cropped_${stem}.wav`, { type: "audio/wav" });
 
               const formData = new FormData();
               formData.append("image", croppedFile);
-              formData.append("overwrite", "true");
+              formData.append("overwrite", "false");   // let the server dedupe; we use the name it returns
 
-              const res = await fetch("/upload/image", { method: "POST", body: formData });
+              const res = await api.fetchApi("/upload/image", { method: "POST", body: formData });
               const data = await res.json();
               const serverFileName = data.name || croppedFile.name;
               const objectUrl = URL.createObjectURL(croppedBlob);
@@ -5255,6 +5523,37 @@ app.registerExtension({
         e.stopPropagation();
         renderLongestSideOverlay();
         openOverlay(longestSideOverlay);
+      };
+
+      // Push S back onto the controls. Used when a workflow restores settings
+      // that were saved with it, after the panel has already been built.
+      const applyStateToUI = () => {
+        sizeTriggerLabel.textContent = `${S.width} × ${S.height}`;
+        updateCustomSizeMenu(S.orientation || "Landscape");
+        cfgInput.value = S.cfg != null ? S.cfg : 1.0;
+        fpsTriggerLabel.textContent = `${S.fps} FPS`;
+        seedInputEl.value = S.seed || 0;
+
+        let d = parseInt(S.duration) || 4;
+        d = Math.min(10, Math.max(1, d));
+        S.duration = d;
+        const pct = ((d - 1) / 9) * 100;
+        sliderFill.style.width = `${pct}%`;
+        sliderThumb.style.left = `calc(${pct}% - 7px)`;
+        durValueLbl.textContent = `${d}s`;
+        durInfoLbl.textContent = calcFramesText(d, parseInt(S.fps) || 24);
+
+        autoSaveTrack.style.background = S.autoSave ? LIME : C.dim;
+        autoSaveThumb.style.left = S.autoSave ? "14px" : "2px";
+        autoSaveThumb.style.background = S.autoSave ? "#111" : "#888";
+
+        promptTA.value = S.prompt || "";
+        negTA.value = S.negativePrompt || "";
+
+        if (!Array.isArray(S.loras)) S.loras = [];
+        renderLoraSlots();
+        updateR2vSwitch(S.r2v_type === "SING" ? "SING" : "SPEAK");
+        setMode(S.mode || "T2V");
       };
 
       // Mode Switcher logic with Vector Icon state updates
@@ -5307,6 +5606,8 @@ app.registerExtension({
           box2Video.style.display = "flex";
         }
 
+        syncExtraSlots();
+
         self.setSize([NODE_W, NODE_H + 50]);
         if (self.graph) self.setDirtyCanvas(true, true);
       }
@@ -5316,6 +5617,12 @@ app.registerExtension({
       // Generate Action Handler
       let activePromptId = null;
       let ourRunActive = false;
+      // Whether the websocket has told us anything about this run. Behind a
+      // proxy that drops websockets - most rented GPU boxes - it never does,
+      // and the status line used to sit on "Queuing workflow..." for the whole
+      // render, which reads as a hang. When this stays false the poll loop
+      // drives the status from /queue instead.
+      let sawServerEvent = false;
       genBtn.onclick = async () => {
         let activeWorkflowMode = S.mode;
         if (S.mode === "I2V") {
@@ -5355,6 +5662,7 @@ app.registerExtension({
         progressBarInner.style.width = "15%";
 
         ourRunActive = true;
+        sawServerEvent = false;
         try {
           const queued = await executePixaromaWorkflow(activeWorkflowMode, {
             prompt: S.prompt,
@@ -5375,10 +5683,15 @@ app.registerExtension({
             resample_mode: S.resample_mode,
             image_name_1: imgData1 ? imgData1.name : null,
             image_name_2: imgData2 ? imgData2.name : null,
+            // Slots 1..9 in order; the extras only exist in R2V.
+            image_names: [imgData1, imgData2, ...extraImgs].map(img => (img ? img.name : null)),
             audio_name: audioData ? audioData.name : null,
             video_name: videoData ? videoData.name : null,
           }, statusLabel, progressBarInner);
           activePromptId = (queued && queued.prompt_id) || null;
+          // Without an id there is no backstop poll, and nothing would ever
+          // take the button off "Generating...". Fail loudly instead.
+          if (!activePromptId) throw new Error("ComfyUI accepted the run but returned no prompt id");
           pollRunUntilDone(activePromptId);
         } catch (err) {
           ourRunActive = false;
@@ -5407,20 +5720,22 @@ app.registerExtension({
         statusLabel.style.color = C.err;
       };
 
-      api.addEventListener("execution_start", (e) => {
+      onApi("execution_start", (e) => {
         if (!ourRunActive) return;
+        sawServerEvent = true;
         statusRow.style.display = "flex";
         tx(statusLabel, "Executing workflow...");
         statusLabel.style.color = C.text;
         progressBarInner.style.width = "20%";
       });
 
-      api.addEventListener("execution_error", handleExecutionError);
-      api.addEventListener("exec_error", handleExecutionError);
-      api.addEventListener("execution_interrupted", handleExecutionError);
+      onApi("execution_error", handleExecutionError);
+      onApi("exec_error", handleExecutionError);
+      onApi("execution_interrupted", handleExecutionError);
 
-      api.addEventListener("progress", (e) => {
+      onApi("progress", (e) => {
         if (!ourRunActive) return;
+        sawServerEvent = true;
         if (e.detail && e.detail.max) {
           const pct = Math.round((e.detail.value / e.detail.max) * 100);
           tx(statusLabel, `Rendering frame ${e.detail.value}/${e.detail.max}`);
@@ -5533,11 +5848,32 @@ app.registerExtension({
         statusLabel.style.color = C.err;
       };
 
+      // Hand the finished file to the backend, which is where the node's VIDEO
+      // output reads it from. Without this the Python side has nothing to pass
+      // downstream - the route existed but nothing ever called it.
+      const reportOutput = async (item) => {
+        if (!item || self.id == null) return;
+        try {
+          await api.fetchApi("/minimax_h3/set_output", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              node_id: String(self.id),
+              video_info: {
+                filename: item.filename,
+                subfolder: item.subfolder || "",
+                type: item.type || "output",
+              },
+            }),
+          });
+        } catch (e) { /* the clip plays either way */ }
+      };
+
       // Record what produced the clip, so Gallery cards can show it later.
       const writeSidecar = async (item) => {
         if (!item || !S.autoSave) return;
         try {
-          await fetch("/minimax_h3/save_meta", {
+          await api.fetchApi("/minimax_h3/save_meta", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -5568,6 +5904,7 @@ app.registerExtension({
         playDone();
 
         if (!playVideoItem(item)) playFromHistory(promptId || activePromptId);
+        reportOutput(item);
         writeSidecar(item);
       };
 
@@ -5577,50 +5914,134 @@ app.registerExtension({
         finishRun(findVideoItem(detail.output), detail.prompt_id);
       };
 
-      api.addEventListener("executed", handleExecutedEvent);
-      api.addEventListener("execution_success", handleExecutedEvent);
+      onApi("executed", handleExecutedEvent);
+      onApi("execution_success", handleExecutedEvent);
 
       // Websocket events are not a reliable completion signal: they can be
       // missed on reconnect, and a run queued from another tab is filtered out
       // by design, which would otherwise leave this node stuck on
       // "Generating..." forever. Poll our own prompt in /history as a backstop.
+      //
+      // The poll lasts as long as the server still knows about the prompt. It
+      // used to stop after 1200 ticks (~40 min) and return in silence: an HD
+      // 10s run is 175 frames and takes longer than that on a cloud GPU, so the
+      // backstop expired mid-render and the node sat on "Generating..." for good.
       const pollRunUntilDone = async (promptId) => {
         if (!promptId) return;
-        for (let i = 0; i < 1200 && ourRunActive; i++) {
-          await new Promise(r => setTimeout(r, 2000));
-          if (!ourRunActive) return;
+        let unknownPolls = 0;      // consecutive polls where the server knows nothing about this prompt
+        let unreachable = 0;       // consecutive status calls that failed outright
+        // This poll belongs to ONE prompt. Stopping a run and starting another
+        // inside the poll gap used to leave the old loop alive on the shared
+        // flag, where it reset the button and declared the run gone - in the
+        // middle of the new run, whose own loop had quit on that same flag.
+        const stillOurs = () => ourRunActive && activePromptId === promptId;
+        while (stillOurs()) {
+          await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+          if (!stillOurs()) return;
+
+          // A status call that fails is a network blip, never evidence the run
+          // is gone - a cloud box drops requests and the run must survive that.
+          let known = false;
+          let reachable = true;
+
+          try {
+            const qres = await api.fetchApi("/queue");
+            if (!stillOurs()) return;
+            if (qres && qres.ok) {
+              const q = await qres.json();
+              if (!stillOurs()) return;
+              const at = (list) => (list || []).findIndex(item => item && item[1] === promptId);
+              const running = at(q.queue_running);
+              const pending = at(q.queue_pending);
+              known = running >= 0 || pending >= 0;
+
+              // No websocket events for this run: say what the server queue
+              // says, so a render in progress does not look like a dead UI.
+              if (!sawServerEvent && running >= 0) {
+                tx(statusLabel, "Running on the server - live progress unavailable");
+                statusLabel.style.color = C.text;
+                progressBarInner.style.width = "35%";
+              } else if (!sawServerEvent && pending >= 0) {
+                tx(statusLabel, pending > 0 ? `Queued - ${pending} run(s) ahead` : "Queued on the server");
+                statusLabel.style.color = C.text;
+              }
+            } else {
+              // A dead server behind a proxy answers with an HTTP error, not a
+              // thrown one, so this counts as unreachable too - without it the
+              // poll never gave up on a 502.
+              known = true;
+              reachable = false;
+            }
+          } catch (e) { known = true; reachable = false; }
+
           try {
             const res = await api.fetchApi(`/history/${promptId}`);
-            if (!res || !res.ok) continue;
-            const entry = (await res.json())[promptId];
-            if (!entry) continue;   // still queued or running
+            if (!stillOurs()) return;
+            if (!res || !res.ok) {
+              known = true;
+              reachable = false;
+            } else {
+              const entry = (await res.json())[promptId];
+              if (!stillOurs()) return;
+              if (entry) {
+                known = true;
+                const status = entry.status || {};
+                if (status.status_str === "error") {
+                  ourRunActive = false;
+                  hideGenTimer();
+                  resetGenerateButton();
+                  const msgs = (status.messages || [])
+                    .filter(msg => msg[0] === "execution_error")
+                    .map(msg => (msg[1] || {}).exception_message)
+                    .filter(Boolean);
+                  tx(statusLabel, `Error: ${msgs[0] || "execution failed"}`);
+                  statusLabel.style.color = C.err;
+                  return;
+                }
 
-            const status = entry.status || {};
-            if (status.status_str === "error") {
-              ourRunActive = false;
-              hideGenTimer();
-              resetGenerateButton();
-              const msgs = (status.messages || [])
-                .filter(msg => msg[0] === "execution_error")
-                .map(msg => (msg[1] || {}).exception_message)
-                .filter(Boolean);
-              tx(statusLabel, `Error: ${msgs[0] || "execution failed"}`);
-              statusLabel.style.color = C.err;
-              return;
+                for (const nodeOut of Object.values(entry.outputs || {})) {
+                  const item = findVideoItem(nodeOut);
+                  if (item) { finishRun(item, promptId); return; }
+                }
+                if (status.completed) { finishRun(null, promptId); return; }
+              }
             }
+          } catch (err) { known = true; reachable = false; }
 
-            for (const nodeOut of Object.values(entry.outputs || {})) {
-              const item = findVideoItem(nodeOut);
-              if (item) { finishRun(item, promptId); return; }
-            }
-            if (status.completed) { finishRun(null, promptId); return; }
-          } catch (err) { /* keep polling */ }
+          // Every status call failing keeps `known` true, which on its own
+          // would poll a dead server every two seconds for ever with the button
+          // stuck on "Generating...". Treating a blip as a lost run would be
+          // worse, so this only gives up after minutes of total silence.
+          unreachable = reachable ? 0 : unreachable + 1;
+          if (unreachable >= MAX_UNREACHABLE_POLLS) {
+            ourRunActive = false;
+            hideGenTimer();
+            resetGenerateButton();
+            tx(statusLabel, "Lost contact with the server - the run may still be going; reload to reconnect");
+            statusLabel.style.color = C.err;
+            return;
+          }
+
+          // In neither the queue nor history: cancelled from elsewhere, or the
+          // server restarted mid-run. A few quiet polls before saying so, since
+          // a just-submitted prompt can briefly be in neither.
+          unknownPolls = known ? 0 : unknownPolls + 1;
+          if (unknownPolls >= MAX_UNKNOWN_POLLS) {
+            ourRunActive = false;
+            hideGenTimer();
+            resetGenerateButton();
+            tx(statusLabel, "Run is no longer on the server - cancelled, or the server restarted");
+            statusLabel.style.color = C.err;
+            return;
+          }
         }
       };
 
+      // Same deal for the raw socket: keep the reference so it comes off again.
+      let onSocketMessage = null;
       if (api.socket) {
         try {
-          api.socket.addEventListener("message", (event) => {
+          onSocketMessage = (event) => {
             try {
               const msg = JSON.parse(event.data);
               if (msg.type === "executed" || msg.type === "execution_success") {
@@ -5629,7 +6050,8 @@ app.registerExtension({
                 handleExecutionError({ detail: msg.data });
               }
             } catch (err) {}
-          });
+          };
+          api.socket.addEventListener("message", onSocketMessage);
         } catch (err) {}
       }
 
@@ -5644,13 +6066,40 @@ app.registerExtension({
         },
       });
 
-      // Drop the document-level fullscreen listeners with the node.
+      // A workflow being opened configures the node after it was created, so
+      // its settings arrive here, once the panel already exists.
+      const origOnConfigure = this.onConfigure;
+      this.onConfigure = function (info) {
+        const saved = (info && info.properties && info.properties.mmh3_state)
+          || (this.properties && this.properties.mmh3_state);
+        if (saved && typeof saved === "object") {
+          Object.assign(S, sanitizeState(saved));
+          try {
+            applyStateToUI();
+          } catch (e) {
+            console.warn("[MinimaxH3] Could not restore the saved settings:", e);
+          }
+        }
+        return origOnConfigure ? origOnConfigure.apply(this, arguments) : undefined;
+      };
+
+      // Drop the document-level fullscreen listeners, and everything else this
+      // node parked outside its own DOM, along with the node.
       const origOnRemoved = this.onRemoved;
       this.onRemoved = function () {
         exitFsFallback();   // never strand the root on <body>
         document.removeEventListener("fullscreenchange", onFsChange);
         document.removeEventListener("webkitfullscreenchange", onFsChange);
         document.removeEventListener("keydown", onFsKey);
+
+        ourRunActive = false;   // stops the /history poll on the next tick
+        stopGenTimer();
+        apiListeners.forEach(([evt, fn]) => api.removeEventListener(evt, fn));
+        if (onSocketMessage && api.socket) api.socket.removeEventListener("message", onSocketMessage);
+        apiListeners.length = 0;
+        ownedNodes.forEach(el => { if (el && el.parentNode) el.parentNode.removeChild(el); });
+        ownedNodes.length = 0;
+
         return origOnRemoved ? origOnRemoved.apply(this, arguments) : undefined;
       };
     };
