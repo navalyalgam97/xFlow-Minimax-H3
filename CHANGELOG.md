@@ -2,6 +2,48 @@
 
 All notable changes to the **xFlowOne · Minimax H3** single-node video interface for ComfyUI.
 
+## [1.13.0] - 2026-10-29
+
+### 🖼️ Up To 9 Reference Images, A Run That Never Hangs, And 23 Fixes From A Full Audit
+
+- **🖼️ Up To Nine Reference Images In R2V**: `REF IMAGE`, `REF IMAGE 2 (OPT)`, then **+ Add Reference** reveals one slot at a time up to `REF IMAGE 9`. Nine is the model's own ceiling, not a UI choice — `MiniMaxH3ReferenceToVideo` exposes `ref_image_0..8`.
+  - The templates ship two image loaders, so the extras are built at submit time: the second loader is cloned once per reference and linked to its own slot. Reference 1 keeps its own path through Longest Side, since it alone drives the output resolution.
+  - References fill the model's slots with no holes whatever their slot numbers on the node face. Leaving a hole would renumber what the model calls `<Picture 2>`, `<Picture 3>` … against what the node shows, so a prompt written from the labels pointed at the wrong picture.
+  - Audio and video uploads moved into their own row underneath, so every image slot now reads as one group.
+  - Each extra reference costs real time: reference tokens ride through every sampling step, and `ref_image_size: max` compounds it.
+
+- **⏱️ A Long Run No Longer Sticks On "Generating…"**: the completion poll gave up after 1200 ticks (~40 minutes) and returned in silence. An HD 10-second run is 175 frames and takes longer than that on a rented GPU, so the backstop expired mid-render and the node sat there for good while the clip finished on the server.
+  - The poll now lasts as long as the server still knows about the prompt, and belongs to one run: stopping and restarting inside the poll gap used to let the old run's loop reset the button and announce "no longer on the server" over the top of the new one.
+  - A dead server is no longer polled for ever. After about two minutes of total silence — thrown errors and HTTP errors alike — it says contact was lost instead of leaving the button spinning.
+  - A run the server has genuinely dropped is reported, rather than going quiet.
+
+- **💾 Settings Travel With The Workflow**: every setting lived in one browser-wide slot, so two nodes on a canvas overwrote each other and a workflow you sent someone opened with *their* settings. Each node now carries its own inside the workflow file.
+  - A workflow is someone else's data, so it is read key by key with type and range checks rather than merged wholesale, and local upload filenames no longer travel in a file you share.
+
+- **🎞️ The VIDEO Output Works**: it returned a plain dict holding a filename invented from the clock, for a file that was never written — in a shape no VIDEO consumer accepts. Anything wired to it (Save Video, Preview Video, VHS) died on it. The finished clip is now reported back by the node and handed on as a real video. With nothing generated yet it says so plainly instead of passing on a path to nothing.
+
+- **🔒 Output Routes Could Reach Outside Their Own Folder**: `filename` was resolved against the whole output directory rather than the node's folder, so `../something.png` stayed inside the root and passed. Anything that could reach ComfyUI could delete any file it had ever written, sidecars included. Filenames and subfolders are now names, not paths. `/set_output` validates what it is handed instead of storing arbitrary JSON that a later disk read trusts.
+
+- **⬇️ Downloads Can No Longer Corrupt A Model**: a resume appended to the partial file whatever the server answered. A CDN that ignores the range request replies with the whole file, which was glued onto the partial, reported as complete, and only failed much later at load time looking like a bad model. A resume now only appends on a genuine `206`, a dropped connection mid-stream is kept as a partial instead of being promoted to a final `.safetensors`, a second click cannot start a second writer on the same file, and pause-then-resume no longer silently does nothing.
+
+- **🖥️ Controls That Were Never Actually Wired**: eleven DOM properties sat in the styling argument, where they were silently dropped.
+  - **CFG SCALE** and **SEED** rendered as empty text boxes, **uploaded audio had no play controls**, the **LoRA dropdown showed blank entries** and selected nothing, the **LoRA strength box** was empty and unclamped, the **crop sliders** were text boxes, and the **waveform** was drawn into a default-sized buffer.
+  - The panel's entire scoped stylesheet had never applied, including the rules that hide ComfyUI's own node chrome behind it.
+
+- **📁 Favourites Survive An Update**: they were stored inside the node's folder, so the usual delete-and-reinstall wiped them. They now live with the user config and are carried over on first read. The debug payload dump moved with them, so a read-only install no longer fails on it.
+
+- **🔌 Works Behind A Sub-Path Proxy**: 17 requests used absolute paths that only resolve when ComfyUI is served from the domain root. Behind a reverse proxy the Setup panel showed no models, the Gallery was empty and uploads failed.
+
+- **🧹 A Deleted Node Lets Go**: removing the node left eleven file inputs and the audio overlay attached to the page and eight live event handlers running — firing for other people's runs, driving a node that no longer existed, and multiplying with every node added.
+
+- **🎧 Trimmed Audio Is Saved As Audio**: a trimmed `.mp3` contained WAV data under its original extension, which loaders that dispatch on extension refuse. A zero-length selection now says what is wrong instead of failing deep in the browser's audio engine.
+
+- **🖼️ I2V With A Missing End Frame** quietly rendered last-frame-equals-first-frame. It now falls back to the first-frame workflow and says so.
+
+> Tests went from 16 to 33, covering the download resume, the path containment, the route validation and the VIDEO output. The node's own interface file still has no automated tests; that gap is recorded in `TODOS.md` rather than left to be rediscovered.
+
+---
+
 ## [1.12.1] - 2026-08-20
 
 ### 🐛 The LoRA Drawer Opened Into The Node's Bottom Edge

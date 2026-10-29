@@ -3,7 +3,7 @@
 <div align="center">
 
 ![xFlowOne Banner](https://img.shields.io/badge/xFlowOne-Minimax_H3-00ff66?style=for-the-badge&logo=comfyui&logoColor=black)
-![Version](https://img.shields.io/badge/version-1.12.1-00ff66?style=for-the-badge)
+![Version](https://img.shields.io/badge/version-1.13.0-00ff66?style=for-the-badge)
 ![License](https://img.shields.io/badge/license-MIT-blue?style=for-the-badge)
 
 *A single-node, 1:1 `xFlowOne` design system UI for Minimax H3 Video Generation in ComfyUI V2.*
@@ -62,7 +62,20 @@ All required models can be managed and downloaded automatically via the built-in
 
 ## 📜 Changelog
 
-### Version 1.12.1 (Latest Release)
+### Version 1.13.0 (Latest Release)
+
+> Up to nine reference images, a run that no longer sticks on "Generating...", and 23 fixes from a full audit.
+
+- 🖼️ **Up to 9 reference images in R2V** — `REF IMAGE`, `REF IMAGE 2 (OPT)`, then **+ Add Reference** up to `REF IMAGE 9`. Nine is the model's own ceiling (`ref_image_0..8`). Audio and video moved into their own row below, so the image slots read as one group.
+- ⏱️ **Long runs finish** — the completion poll gave up after ~40 minutes in silence, so an HD 10s render (175 frames) sat on "Generating..." for ever while the clip finished on the server. It now lasts as long as the server knows the prompt, belongs to one run, and reports a dropped run instead of going quiet.
+- 💾 **Settings travel with the workflow** — each node carries its own, so two nodes stop overwriting each other and a workflow you send opens with your settings, not the recipient's.
+- 🎞️ **The VIDEO output works** — it used to hand on a path to a file that was never written, in a shape no VIDEO consumer accepts.
+- 🔒 **Output routes stay in their own folder** — `../something.png` used to resolve inside the output root and pass, so anything reaching ComfyUI could delete any file it had written.
+- ⬇️ **Downloads can no longer corrupt a model** — a resume only appends on a genuine `206`, a truncated stream is kept as a partial, and a second click cannot start a second writer.
+- 🖥️ **Controls that were never wired** — CFG and SEED rendered empty, uploaded audio had no play controls, the LoRA dropdown was blank, the crop sliders were text boxes, and the panel's whole scoped stylesheet had never applied.
+- 📁 **Favourites survive an update**, 🔌 **works behind a sub-path proxy**, 🧹 **a deleted node lets go** of its handlers and DOM, and 🎧 **trimmed audio is saved as `.wav`** rather than keeping the source extension.
+
+### Version 1.12.1
 
 > Fixes the LoRA drawer opening into the node's bottom edge.
 
